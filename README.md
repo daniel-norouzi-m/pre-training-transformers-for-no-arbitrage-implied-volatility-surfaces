@@ -27,11 +27,11 @@ The project is structured into several key components:
 
 Variational Inference (VI) is a method used to approximate complex posterior distributions in Bayesian inference. Instead of directly computing the posterior $p(z|x)$, which is often intractable, VI optimizes a simpler distribution $q_{\phi}(z|x)$ to be close to the true posterior. This is achieved by minimizing the Kullback-Leibler (KL) divergence between the approximate posterior and the true posterior:
 
-$$ \text{KL}(q_{\phi}(z|x) \| p(z|x)) = \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{q_{\phi}(z|x)}{p(z|x)} \right] $$
+$$\text{KL}(q_{\phi}(z|x) \| p(z|x)) = \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{q_{\phi}(z|x)}{p(z|x)} \right]$$
 
 Minimizing this divergence is equivalent to maximizing the Evidence Lower Bound (ELBO):
 
-$$ \mathcal{L}(q) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z)) $$
+$$\mathcal{L}(q) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))$$
 
 ### Normalizing Flows
 
@@ -41,27 +41,27 @@ Normalizing Flows are a series of invertible transformations applied to a simple
 
 Planar Flows are a specific type of normalizing flow where each transformation is defined as:
 
-$$ z_k = z_{k-1} + u h(w^T z_{k-1} + b) $$
+$$z_k = z_{k-1} + u h(w^T z_{k-1} + b)$$
 
 Here, $u$, $w$, and $b$ are learnable parameters, and $h$ is a non-linear activation function, typically $\tanh$. The invertibility condition for planar flows is:
 
-$$ w^T u \geq -1 $$
+$$w^T u \geq -1$$
 
 To ensure this condition is met, we modify $u$ as follows:
 
-$$ \tilde{u} = u + \left( m(w^T u) - w^T u \right) \frac{w}{\|w\|^2} $$
+$$\tilde{u} = u + \left( m(w^T u) - w^T u \right) \frac{w}{\|w\|^2}$$
 
 where $m(x) = -1 + \log(1 + e^x)$.
 
 The log-determinant of the Jacobian for the transformation is:
 
-$$ \ln \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| = \ln \left| 1 + u^T h'(w^T z_{k-1} + b) w \right| $$
+$$\ln \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| = \ln \left| 1 + u^T h'(w^T z_{k-1} + b) w \right|$$
 
 ### Evidence Lower Bound (ELBO)
 
 The ELBO in the context of our model with planar flows can be written as:
 
-$$ \mathcal{L}(q) = \mathbb{E}_{q_0(z_0)} \left[ \log p_{\theta}(x|z_K) + \log p(z_K) - \log q_0(z_0) - \sum_{k=1}^K \log \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| \right] $$
+$$\mathcal{L}(q) = \mathbb{E}_{q_0(z_0)} \left[ \log p_{\theta}(x|z_K) + \log p(z_K) - \log q_0(z_0) - \sum_{k=1}^K \log \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| \right]$$
 
 Where $z_K$ is the final latent variable obtained after applying $K$ planar flows to the initial latent variable $z_0$.
 
@@ -69,7 +69,7 @@ Where $z_K$ is the final latent variable obtained after applying $K$ planar flow
 
 The ELBO loss function combines the reconstruction loss (e.g., mean squared error) and the KL divergence between the approximate posterior and the prior:
 
-$$ \text{ELBO} = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z)) $$
+$$\text{ELBO} = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))$$
 
 The KL divergence term regularizes the approximate posterior to be close to the prior, while the reconstruction term measures how well the model can reconstruct the input data from the latent variables.
 
