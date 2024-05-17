@@ -29,7 +29,7 @@ We generate synthetic sample data to simulate IV surfaces and additional asset a
 
 ### Planar Flow Layer
 
-Planar flows modify their parameters to ensure invertibility, which is crucial for the flow-based variational inference framework. The planar flow layer includes the condition \( w^T u \geq -1 \) to maintain invertibility.
+Planar flows modify their parameters to ensure invertibility, which is crucial for the flow-based variational inference framework. The planar flow layer includes the condition $ w^T u \geq -1 $ to maintain invertibility.
 
 ### Encoder Network
 
@@ -37,7 +37,7 @@ The encoder network takes the IV grid and additional features as input and outpu
 
 ### Decoder Network
 
-The decoder network takes the latent variable \( z \) and conditioning features (including strike price and time to maturity) to generate a single implied volatility point. This network enables the generative capabilities of the model.
+The decoder network takes the latent variable $ z $ and conditioning features (including strike price and time to maturity) to generate a single implied volatility point. This network enables the generative capabilities of the model.
 
 ### Variational Autoencoder (VAE)
 
