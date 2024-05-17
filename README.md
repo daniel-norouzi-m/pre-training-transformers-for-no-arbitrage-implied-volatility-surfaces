@@ -27,9 +27,9 @@ The project is structured into several key components:
 
 Variational Inference (VI) is a method used to approximate complex posterior distributions in Bayesian inference. Instead of directly computing the posterior $p(z|x)$, which is often intractable, VI optimizes a simpler distribution $q_{\phi}(z|x)$ to be close to the true posterior. This is achieved by minimizing the Kullback-Leibler (KL) divergence between the approximate posterior and the true posterior:
 
-$$
+```math
 \text{KL}(q_{\phi}(z|x) \| p(z|x)) = \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{q_{\phi}(z|x)}{p(z|x)} \right]
-$$
+```
 
 Minimizing this divergence is equivalent to maximizing the Evidence Lower Bound (ELBO):
 
