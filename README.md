@@ -33,7 +33,9 @@ Variational Inference (VI) is a method used to approximate complex posterior dis
 
 Minimizing this divergence is equivalent to maximizing the Evidence Lower Bound (ELBO):
 
-$$\mathcal{L}(q) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))$$
+```math
+\mathcal{L}(q) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))
+```
 
 ### Normalizing Flows
 
@@ -43,7 +45,9 @@ Normalizing Flows are a series of invertible transformations applied to a simple
 
 Planar Flows are a specific type of normalizing flow where each transformation is defined as:
 
-$$z_k = z_{k-1} + u h(w^T z_{k-1} + b)$$
+```math
+z_k = z_{k-1} + u h(w^T z_{k-1} + b)
+```
 
 Here, $u$, $w$, and $b$ are learnable parameters, and $h$ is a non-linear activation function, typically $\tanh$. The invertibility condition for planar flows is:
 
@@ -63,7 +67,9 @@ $$\ln \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| = \ln \left| 1 +
 
 The ELBO in the context of our model with planar flows can be written as:
 
-$$\mathcal{L}(q) = \mathbb{E}_{q_0(z_0)} \left[ \log p_{\theta}(x|z_K) + \log p(z_K) - \log q_0(z_0) - \sum_{k=1}^K \log \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| \right]$$
+```math
+\mathcal{L}(q) = \mathbb{E}_{q_0(z_0)} \left[ \log p_{\theta}(x|z_K) + \log p(z_K) - \log q_0(z_0) - \sum_{k=1}^K \log \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| \right]
+```
 
 Where $z_K$ is the final latent variable obtained after applying $K$ planar flows to the initial latent variable $z_0$.
 
@@ -71,7 +77,9 @@ Where $z_K$ is the final latent variable obtained after applying $K$ planar flow
 
 The ELBO loss function combines the reconstruction loss (e.g., mean squared error) and the KL divergence between the approximate posterior and the prior:
 
-$$\text{ELBO} = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))$$
+```math
+\text{ELBO} = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))
+```
 
 The KL divergence term regularizes the approximate posterior to be close to the prior, while the reconstruction term measures how well the model can reconstruct the input data from the latent variables.
 
