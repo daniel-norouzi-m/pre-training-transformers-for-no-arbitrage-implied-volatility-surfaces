@@ -1,174 +1,176 @@
 ---
 
-# Variational Inference with Planar Flows for Implied Volatility Surfaces
+# Transformer Model for Implied Volatility Surface Modelling
 
 ## Introduction
 
-This repository contains an implementation of a variational autoencoder (VAE) with planar flows to model and fill implied volatility (IV) surfaces. Implied volatility surfaces are crucial in financial markets for pricing options and managing risk. This project aims to improve the flexibility and accuracy of modeling IV surfaces by leveraging the power of normalizing flows and variational inference.
+This project introduces an innovative transformer-based model for modeling implied volatility surfaces, uniquely incorporating key market features such as VIX, S&P returns, and asset returns. By employing cutting-edge techniques like conditional layer normalization and parametric continuous convolutional networks, the model dynamically adjusts its behavior to reflect current market conditions. This adaptive approach significantly enhances the model's robustness and accuracy, especially for less liquid options or those with sparse data. Pre-trained on high-liquidity options, this model exemplifies the power of transfer learning in financial modeling, allowing seamless fine-tuning for specific, less liquid options to deliver precise and reliable predictions.
 
-## Core Idea
+## Model Pipeline
 
-The core idea of this project is to use planar flows within a variational inference framework to learn a flexible posterior distribution for the latent variables. The model is conditioned on a grid of IVs and additional asset and market features, allowing it to generate and fill missing IV points accurately. The generative model uses the learned posterior samples along with specific conditioning features such as strike price and time to maturity to decode to a single volatility point.
+![image](https://github.com/daniel-norouzi-m/implied-volatility-surface-with-flow-based-generative-models/assets/108014662/060efec1-8ed4-4300-98c4-d08d03a073b1)
 
-## Project Structure
 
-The project is structured into several key components:
+- **Input Embedding Section**:
+  - **Surface Embedding**: Encodes the implied volatility surface into a fixed grid using parametric continuous convolutional filters dynamically generated based on market features.
+  - **Pre Encoder Blocks**: Refines the grid embeddings with dynamically generated convolutional filters and Conditional Layer Normalization.
 
-1. **Data Generation**: Synthetic data generation for implied volatility surfaces and associated features.
-2. **Planar Flow Layer**: Implementation of planar flows to ensure invertible transformations.
-3. **Encoder Network**: Neural network to encode the input IV grid and features into latent variables.
-4. **Decoder Network**: Neural network to decode latent variables and conditioning features into implied volatility points.
-5. **Variational Autoencoder (VAE)**: Integration of encoder, planar flows, and decoder into a VAE.
-6. **Training Loop**: Training procedure to optimize the model parameters.
+- **Surface Encoding**:
+  - **Encoder Blocks**: Captures relationships within the encoded volatility surface using self-attention and feed-forward layers, conditioned by market features.
 
-## Mathematical Background
+- **Query Embedding Section**:
+  - **Query Embedding**: Processes the query point inputs, adding positional encodings to the embeddings.
+  - **Pre Decoder Blocks**: Prepares the query point embeddings for the decoder by enhancing them with market features.
 
-### Variational Inference (VI)
+- **Surface Decoding**:
+  - **Decoder Blocks**: Generates the output by attending to the encoded surface data and conditioned query points using cross-attention and Conditional Layer Normalization.
+  - **Output Mapping**: Maps the decoder output to the target implied volatility value using a fully connected layer.
 
-Variational Inference (VI) is a method used to approximate complex posterior distributions in Bayesian inference. Instead of directly computing the posterior $p(z|x)$, which is often intractable, VI optimizes a simpler distribution $q_{\phi}(z|x)$ to be close to the true posterior. This is achieved by minimizing the Kullback-Leibler (KL) divergence between the approximate posterior and the true posterior:
+### Input Embedding Section
 
-```math
-\text{KL}(q_{\phi}(z|x) \| p(z|x)) = \mathbb{E}_{q_{\phi}(z|x)} \left[ \log \frac{q_{\phi}(z|x)}{p(z|x)} \right]
-```
+#### Surface Embedding
+Encodes the implied volatility surface into a fixed grid using parametric continuous convolutional filters dynamically generated based on market features.
 
-Minimizing this divergence is equivalent to maximizing the Evidence Lower Bound (ELBO):
+**Mathematical Formulation**:
 
-```math
-\mathcal{L}(q) = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))
-```
-
-### Normalizing Flows
-
-Normalizing Flows are a series of invertible transformations applied to a simple initial distribution (e.g., Gaussian) to obtain a more complex distribution. These transformations allow us to model flexible posterior distributions in VI. Each transformation must be invertible and differentiable to ensure that we can compute the Jacobian determinant for the change of variables.
-
-### Planar Flows
-
-Planar Flows are a specific type of normalizing flow where each transformation is defined as:
+Let $\mathbf{X}$ be the input surface data and $z$ be the market features. The embedding is computed as:
 
 ```math
-z_k = z_{k-1} + u h(w^T z_{k-1} + b)
+\mathbf{X}_{\text{grid}} = \text{PCCN}(\mathbf{X}, z)
 ```
 
-Here, $u$, $w$, and $b$ are learnable parameters, and $h$ is a non-linear activation function, typically $\tanh$. The invertibility condition for planar flows is:
+Where PCCN is the Parametric Continuous Convolutional Network conditioned on market features.
 
-$$w^T u \geq -1$$
-
-To ensure this condition is met, we modify $u$ as follows:
-
-$$\tilde{u} = u + \left( m(w^T u) - w^T u \right) \frac{w}{\|w\|^2}$$
-
-where $m(x) = -1 + \log(1 + e^x)$.
-
-The log-determinant of the Jacobian for the transformation is:
-
-$$\ln \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| = \ln \left| 1 + u^T h'(w^T z_{k-1} + b) w \right|$$
-
-### Evidence Lower Bound (ELBO)
-
-The ELBO in the context of our model with planar flows can be written as:
+The PCCN dynamically generates convolutional filters based on market features and the position values $M$ and $T$:
 
 ```math
-\mathcal{L}(q) = \mathbb{E}_{q_0(z_0)} \left[ \log p_{\theta}(x|z_K) + \log p(z_K) - \log q_0(z_0) - \sum_{k=1}^K \log \left| \det \frac{\partial z_k}{\partial z_{k-1}} \right| \right]
+\mathbf{W}_{\text{PCCN}} = f(z, M, T)
 ```
 
-Where $z_K$ is the final latent variable obtained after applying $K$ planar flows to the initial latent variable $z_0$.
-
-### ELBO Loss Function
-
-The ELBO loss function combines the reconstruction loss (e.g., mean squared error) and the KL divergence between the approximate posterior and the prior:
+The convolutional operation within the PCCN can be formulated as:
 
 ```math
-\text{ELBO} = \mathbb{E}_{q_{\phi}(z|x)}[\log p_{\theta}(x|z)] - \text{KL}(q_{\phi}(z|x) \| p(z))
+\mathbf{X}_{\text{grid}, i, j} = \sum_{k,l} \mathbf{W}_{\text{PCCN}, i-k, j-l} \cdot \mathbf{X}_{k, l} + b
 ```
 
-The KL divergence term regularizes the approximate posterior to be close to the prior, while the reconstruction term measures how well the model can reconstruct the input data from the latent variables.
+Where $\mathbf{W}_{\text{PCCN}}$ are the dynamically generated filters and $b$ is the bias term.
 
-## Implementation
+#### Pre Encoder Blocks
+Refines the grid embeddings with dynamically generated convolutional filters and Conditional Layer Normalization (CLN).
 
-### Data Generation
+**Mathematical Formulation**:
 
-We generate synthetic sample data to simulate IV surfaces and additional asset and market features. The IV surfaces are represented as grids with some missing values to mimic real-world scenarios.
+First, apply the convolutional layer conditioned on market features:
 
-### Planar Flow Layer
-
-Planar flows modify their parameters to ensure invertibility, which is crucial for the flow-based variational inference framework. The planar flow layer includes the condition $w^T u \geq -1$ to maintain invertibility.
-
-### Encoder Network
-
-The encoder network takes the IV grid and additional features as input and outputs the parameters of the initial approximate posterior distribution. This network is a crucial part of the variational inference process.
-
-### Decoder Network
-
-The decoder network takes the latent variable $z$ and conditioning features (including strike price and time to maturity) to generate a single implied volatility point. This network enables the generative capabilities of the model.
-
-### Variational Autoencoder (VAE)
-
-The VAE integrates the encoder, multiple planar flows, and decoder. It uses the encoded input and planar flows to learn a flexible posterior distribution, and the decoder generates the IV points.
-
-### Training Loop
-
-The training loop optimizes the model parameters by iterating through the data, performing forward and backward passes, and updating the model using the Adam optimizer. The loss function used is the Evidence Lower Bound (ELBO), which combines the reconstruction term and the KL divergence term.
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.6+
-- PyTorch 1.7+
-- NumPy
-- Matplotlib (for visualization)
-
-### Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/iv-planar-flows.git
-cd iv-planar-flows
+```math
+\mathbf{X}_{\text{conv}} = \text{ReLU}(\mathbf{W}_{\text{conv}}(z) * \mathbf{X}_{\text{grid}} + b)
 ```
 
-Install the required packages:
+Where $\mathbf{W}_{\text{conv}}(z)$ represents the convolutional filters conditioned on market features.
 
-```bash
-pip install -r requirements.txt
+Then, apply Conditional Layer Normalization (CLN) based on the market features:
+
+```math
+\mathbf{Y} = \text{CLN}(\mathbf{X}_{\text{conv}}, z)
 ```
 
-### Running the Code
+The CLN operation can be detailed as:
 
-To generate the data and train the model, you can run the provided Jupyter notebook:
-
-```bash
-jupyter notebook iv_planar_flows.ipynb
+```math
+\text{CLN}(\mathbf{X}_{\text{conv}}, z) = \gamma(z) \left(\frac{\mathbf{X}_{\text{conv}} - \mu}{\sigma}\right) + \beta(z)
 ```
 
-### Usage
+Where $\mu$ and $\sigma$ are the mean and standard deviation of $\mathbf{X}_{\text{conv}}$, and $\gamma(z)$ and $\beta(z)$ are scale and shift parameters conditioned on market features, computed as:
 
-The main components of the project can be used as follows:
+```math
+\gamma(z) = W_\gamma z + b_\gamma
+```
+```math
+\beta(z) = W_\beta z + b_\beta
+```
 
-1. **Data Generation**: Create synthetic data for IV surfaces and features.
-2. **Planar Flow Layer**: Implement and use planar flow layers in your model.
-3. **Encoder and Decoder Networks**: Define and train the encoder and decoder networks.
-4. **VAE with Planar Flows**: Integrate all components into a VAE and train the model.
-5. **Training**: Use the provided training loop to optimize your model.
+### Surface Encoding
 
-## Future Work
+#### Encoder Blocks
+Captures relationships within the encoded volatility surface using self-attention and feed-forward layers, conditioned by market features.
 
-- **Model Refinement**: Experiment with different types of normalizing flows and network architectures.
-- **Data Augmentation**: Incorporate real-world financial data and enhance the data augmentation techniques.
-- **Hyperparameter Tuning**: Optimize hyperparameters for better performance.
-- **Applications**: Apply the model to other financial time series and market signals.
+**Self-Attention Mechanism**:
+```math
+\mathbf{Q}' = \mathbf{Q}
+```
+```math
+\mathbf{K}' = W_k \mathbf{Z} + b_k
+```
+```math
+\mathbf{V}' = W_v \mathbf{Z} + b_v
+```
+```math
+\text{Attention}(Q', K', V') = \text{softmax}\left(\frac{Q' K'^T}{\sqrt{d_k}} + g(\mathbf{E}_z)\right) V'
+```
 
-## Contributing
+**Layer Normalization**:
+```math
+\mathbf{X}' = \text{LayerNorm}(\mathbf{X} + \text{SelfAttention}(Q, K, V, \mathbf{E}_z))
+```
+```math
+\mathbf{Y} = \text{LayerNorm}(\mathbf{X}' + \text{FFN}(\mathbf{X}'), \mathbf{E}_z)
+```
 
-We welcome contributions to this project. If you have any ideas, suggestions, or improvements, please open an issue or submit a pull request. Let's make this project better together!
+### Query Embedding Section
 
-## License
+#### Query Embedding
+Processes the query point inputs, adding positional encodings to the learnable embeddings.
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+**Mathematical Formulation**:
+```math
+\mathbf{Q}_{\text{embed}} = \text{LearnableEmbedding}(M, T) + \text{PositionalEncoding}(M, T)
+```
 
-## Acknowledgements
+#### Pre Decoder Blocks
+Prepares the query point embeddings for the decoder by enhancing them with market features.
 
-- This project is inspired by research in variational inference and normalizing flows.
-- We thank the PyTorch community for providing an excellent deep learning framework.
+**Mathematical Formulation**:
+```math
+\mathbf{Q}_{\text{processed}} = \text{CLN}(\text{ReLU}(\text{FC}(\mathbf{Q}_{\text{embed}})), \mathbf{E}_z)
+```
+
+### Surface Decoding
+
+#### Decoder Blocks
+Generates the output by attending to the encoded surface data and conditioned query points using cross-attention and Conditional Layer Normalization.
+
+**Cross-Attention Mechanism**:
+```math
+\mathbf{Q}' = \mathbf{Q}_{\text{processed}}
+```
+```math
+\mathbf{K}' = W_k \mathbf{X}_{\text{encoded}} + b_k
+```
+```math
+\mathbf{V}' = W_v \mathbf{X}_{\text{encoded}} + b_v
+```
+```math
+\text{Attention}(Q', K', V') = \text{softmax}\left(\frac{Q' K'^T}{\sqrt{d_k}} + g(\mathbf{E}_z)\right) V'
+```
+
+**Layer Normalization**:
+```math
+\mathbf{Y}' = \text{LayerNorm}(\mathbf{Y} + \text{CrossAttention}(Q, K, V, \mathbf{E}_z))
+```
+```math
+\mathbf{Y}_{\text{final}} = \text{LayerNorm}(\mathbf{Y}' + \text{FFN}(\mathbf{Y}'), \mathbf{E}_z)
+```
+
+#### Output Mapping
+Maps the decoder output to the target implied volatility value using a fully connected layer.
+
+**Mathematical Formulation**:
+```math
+\text{IV}_{\text{pred}} = \text{FC}(\mathbf{Y}_{\text{final}})
+```
+
+## Summary
+
+This model integrates advanced transformer techniques with market-conditioned mechanisms to enhance modelling accuracy and robustness for implied volatility surfaces. The structured approach leverages transfer learning, making it adaptable to various market conditions and specific option datasets. This project showcases a novel application of transformers in financial modeling, offering significant contributions to the field.
 
 ---
