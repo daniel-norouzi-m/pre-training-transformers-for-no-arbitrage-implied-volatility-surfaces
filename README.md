@@ -4,27 +4,73 @@
 
 ## Introduction
 
-This project introduces an innovative transformer-based model for modeling implied volatility surfaces, uniquely incorporating key market features such as VIX, S&P returns, and asset returns. By employing cutting-edge techniques like conditional layer normalization and parametric continuous convolutional networks, the model dynamically adjusts its behavior to reflect current market conditions. This adaptive approach significantly enhances the model's robustness and accuracy, especially for less liquid options or those with sparse data. Pre-trained on high-liquidity options, this model exemplifies the power of transfer learning in financial modeling, allowing seamless fine-tuning for specific, less liquid options to deliver precise and reliable predictions.
+This project aims to create a transformer-based model for modeling implied volatility surfaces, uniquely incorporating key market features such as VIX, S&P returns, and asset returns., and ensuring adherence to no-arbitrage constraints. The model uses advanced techniques such as Conditional Layer Normalization (CLN), parametric continuous convolutional networks (PCCN), and a Gaussian Error Linear Unit (GELU) activation function. The project also employs transfer learning to enhance model performance and adaptability. Pre-trained on high-liquidity options, this model exemplifies the power of transfer learning in financial modeling, allowing seamless fine-tuning for specific, less liquid options to deliver precise and reliable predictions.
 
 ## Model Pipeline
 
 ![image](https://github.com/daniel-norouzi-m/implied-volatility-surface-with-flow-based-generative-models/assets/108014662/060efec1-8ed4-4300-98c4-d08d03a073b1)
 
+#### Input Embedding Section
 
-- **Input Embedding Section**:
-  - **Surface Embedding**: Encodes the implied volatility surface into a fixed grid using parametric continuous convolutional filters dynamically generated based on market features.
-  - **Pre Encoder Blocks**: Refines the grid embeddings with dynamically generated convolutional filters and Conditional Layer Normalization.
+1. **Surface Embedding**:
+   - **Purpose**: Encode the implied volatility surface into a fixed grid.
+   - **Method**: Uses PCCN conditioned on market features (like VIX, S&P returns, and asset returns) and grid point M and T values.
+   - **Additional Steps**: Adds positional encodings based on each grid point's M and T values to incorporate the temporal and moneyness structure.
 
-- **Surface Encoding**:
-  - **Encoder Blocks**: Captures relationships within the encoded volatility surface using self-attention and feed-forward layers, conditioned by market features.
+2. **Pre Encoder Blocks**:
+   - **Purpose**: Refine the grid embeddings to prepare for the encoder blocks.
+   - **Method**: Utilizes dynamically generated convolutional filters (conditioned on market features and grid point M and T values) and Conditional Layer Normalization (CLN) with residual connections.
+   - **Structure**: Multiple blocks can be stacked to enhance the representation.
 
-- **Query Embedding Section**:
-  - **Query Embedding**: Processes the query point inputs, adding positional encodings to the embeddings.
-  - **Pre Decoder Blocks**: Prepares the query point embeddings for the decoder by enhancing them with market features.
+#### Surface Encoding
 
-- **Surface Decoding**:
-  - **Decoder Blocks**: Generates the output by attending to the encoded surface data and conditioned query points using cross-attention and Conditional Layer Normalization.
-  - **Output Mapping**: Maps the decoder output to the target implied volatility value using a fully connected layer.
+1. **Encoder Blocks**:
+   - **Purpose**: Capture relationships within the encoded volatility surface.
+   - **Method**: Uses conditional self-attention mechanisms and feed-forward layers, along with CLN and residual connections.
+   - **Structure**: Multiple blocks can be stacked to deepen the model's capacity.
+
+#### Query Embedding Section
+
+1. **Query Embedding**:
+   - **Purpose**: Process the query point input.
+   - **Method**: Uses a learnable embedding for the query point (similar to the [MASK] token in NLP), adding positional encoding specific to the query point.
+
+2. **Pre Decoder Blocks**:
+   - **Purpose**: Enhance query point embeddings with market features.
+   - **Method**: Similar to pre encoder blocks, but focused on query point embeddings.
+   - **Structure**: Multiple blocks can be stacked for richer embedding refinement.
+
+#### Surface Decoding
+
+1. **Decoder Blocks**:
+   - **Purpose**: Generate outputs by attending to encoded surface data and conditioned query points.
+   - **Method**: Uses conditional cross-attention mechanisms and CLN with residual connections.
+   - **Additional Features**: Stores cross-attention weights for later visual analysis using Gaussian kernel smoothing.
+   - **Structure**: Multiple blocks can be stacked to increase the model's depth.
+
+2. **Output Mapping**:
+   - **Purpose**: Map decoder outputs to implied volatility values.
+   - **Method**: Uses a fully connected layer to produce the final output.
+
+#### Soft No-Arbitrage Constraints
+
+1. **Calendar Spread Constraint**:
+   - **Purpose**: Ensure that implied volatilities do not decrease with increasing maturity.
+   - **Method**: Utilizes relevant formulas with derivatives calculated using autograd.
+
+2. **Butterfly Spread Constraint**:
+   - **Purpose**: Ensure convexity of the implied volatility surface.
+   - **Method**: Utilizes relevant formulas with derivatives calculated using autograd.
+
+#### Activation Function
+
+- **GELU (Gaussian Error Linear Unit)**:
+  - **Usage**: Applied throughout the model for non-linear transformations, providing smoother and more effective activation compared to ReLU.
+
+#### Transfer Learning
+
+- **Purpose**: Enhance model adaptability and performance.
+- **Method**: Pre-train the model on high-liquidity options, then freeze and add new components to fine-tune with new data.
 
 ### Input Embedding Section
 
