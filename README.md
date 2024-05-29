@@ -12,9 +12,9 @@ This project aims to create a transformer-based model for modeling implied volat
 
 #### Input Embedding Section
 
-1. **Surface Embedding**:
+1. **Surface Embedding Block**:
    - **Purpose**: Encode the implied volatility surface into a fixed grid.
-   - **Method**: Uses PCCN conditioned on market features (like VIX, S&P returns, and asset returns) and grid point M and T values.
+   - **Method**: Uses PCCN and 1x1 convolutions to embed the surface.
    - **Additional Steps**: Adds positional encodings based on each grid point's M and T values to incorporate the temporal and moneyness structure.
 
 2. **Pre Encoder Blocks**:
@@ -22,7 +22,7 @@ This project aims to create a transformer-based model for modeling implied volat
    - **Method**: Utilizes dynamically generated convolutional filters (conditioned on market features and grid point M and T values) and Conditional Layer Normalization (CLN) with residual connections.
    - **Structure**: Multiple blocks can be stacked to enhance the representation.
 
-#### Surface Encoding
+#### Surface Encoding Section
 
 1. **Encoder Blocks**:
    - **Purpose**: Capture relationships within the encoded volatility surface.
@@ -31,7 +31,7 @@ This project aims to create a transformer-based model for modeling implied volat
 
 #### Query Embedding Section
 
-1. **Query Embedding**:
+1. **Query Embedding Block**:
    - **Purpose**: Process the query point input.
    - **Method**: Uses a learnable embedding for the query point (similar to the [MASK] token in NLP), adding positional encoding specific to the query point.
 
@@ -48,7 +48,7 @@ This project aims to create a transformer-based model for modeling implied volat
    - **Additional Features**: Stores cross-attention weights for later visual analysis using Gaussian kernel smoothing.
    - **Structure**: Multiple blocks can be stacked to increase the model's depth.
 
-2. **Output Mapping**:
+2. **Output Mapping Block**:
    - **Purpose**: Map decoder outputs to implied volatility values.
    - **Method**: Uses a fully connected layer to produce the final output.
 
@@ -74,32 +74,57 @@ This project aims to create a transformer-based model for modeling implied volat
 
 ### Input Embedding Section
 
-#### Surface Embedding
-Encodes the implied volatility surface into a fixed grid using parametric continuous convolutional filters dynamically generated based on market features.
+#### Surface Embedding Block 
 
-**Mathematical Formulation**:
+##### Inputs
+1. **Grid Points $\mathbf{x}_j = (M_j, T_j)$**: Reference points where the encoded values are to be computed, representing moneyness (M) and time to maturity (T).
 
-Let $\mathbf{X}$ be the input surface data and $z$ be the market features. The embedding is computed as:
-
-```math
-\mathbf{X}_{\text{grid}} = \text{PCCN}(\mathbf{X}, z)
-```
-
-Where PCCN is the Parametric Continuous Convolutional Network conditioned on market features.
-
-The PCCN dynamically generates convolutional filters based on market features and the position values $M$ and $T$:
+##### Processing
+1. **Parametric Continuous Convolution**:
+   - Compute the encoded surface values $h_j$ using PCCN:
 
 ```math
-\mathbf{W}_{\text{PCCN}} = f(z, M, T)
+h_{j} = \sum_{i=1}^{N} g(\mathbf{y}_i - \mathbf{x}_j; \theta) \cdot f_i
+```
+   
+   Where $g$ is parameterized by an MLP, $\mathbf{y}_i$ are the input data points, and $f_i$ are the corresponding IV values.
+
+2. **1x1 Convolution**:
+   - Project the 1-channel encoded surface to a higher dimensional space using a 1x1 convolution:
+```math
+H = \text{Conv1x1}(h, \mathbf{W}_{1x1}, b)
 ```
 
-The convolutional operation within the PCCN can be formulated as:
+3. **2D Positional Encoding**:
+   - Add positional encoding to the output of the 1x1 convolution. The positional encoding for each dimension M and T is defined as follows for a dimension size $d_{\text{embedding}}$:
 
 ```math
-\mathbf{X}_{\text{grid}, i, j} = \sum_{k,l} \mathbf{W}_{\text{PCCN}, i-k, j-l} \cdot \mathbf{X}_{k, l} + b
+PE(M_j, T_j, 2i) = \sin\left(\frac{M_j}{10000^{4i/d_{\text{embedding}}}}\right)
+```
+```math
+PE(M_j, T_j, 2i+1) = \cos\left(\frac{M_j}{10000^{4i/d_{\text{embedding}}}}\right)
+```
+```math
+PE(M_j, T_j, 2j+\frac{d_{\text{embedding}}}{2}) = \sin\left(\frac{T_j}{10000^{4j/d_{\text{embedding}}}}\right)
+```
+```math
+PE(M_j, T_j, 2j+1+\frac{d_{\text{embedding}}}{2}) = \cos\left(\frac{T_j}{10000^{4j/d_{\text{embedding}}}}\right)
+```
+   Where $i, j$ are integers in the range $[0, d_{\text{embedding}}/4)$.
+
+   - The full positional encoding $\mathbf{PE}(M_j, T_j)$ is concatenated or added to the embedding vector $H$ from the 1x1 convolution for each grid point:
+```math
+H_{\text{final}} = H + \mathbf{PE}(M_j, T_j)
 ```
 
-Where $\mathbf{W}_{\text{PCCN}}$ are the dynamically generated filters and $b$ is the bias term.
+4. **Layer Normalization**:
+   - Apply layer normalization to the final embedding vector to ensure it is properly normalized for input into the subsequent transformer layers:
+```math
+H_{\text{norm}} = \text{LayerNorm}(H_{\text{final}})
+```
+
+##### Output
+- **Encoded and Normalized Surface Embeddings $H_{\text{norm}}$**: These embeddings are now ready to be fed into the encoder blocks of the transformer.
 
 #### Pre Encoder Blocks
 Refines the grid embeddings with dynamically generated convolutional filters and Conditional Layer Normalization (CLN).
