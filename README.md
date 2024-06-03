@@ -10,6 +10,19 @@ This project aims to create a transformer-based model for modeling implied volat
 
 ![image](https://github.com/daniel-norouzi-m/implied-volatility-surface-with-flow-based-generative-models/assets/108014662/060efec1-8ed4-4300-98c4-d08d03a073b1)
 
+#### Surface Preprocessing
+
+1. **Dataset Creation**:
+   - **Purpose**: Construct a dataset from raw options data that includes varying market conditions and data completeness.
+   - **Method**: Features such as log moneyness, time to maturity, and implied volatility are used along with market features. Data points are clustered and selectively masked to simulate incomplete data scenarios, training the model to predict missing information.
+   - **Proportional Sampling**: Implements variable masking proportions to simulate different levels of data availability, enhancing the model's robustness and ability to generalize.
+
+2. **Custom Batch Normalization**:
+   - **Purpose**: Normalize features across the dataset to stabilize neural network training.
+   - **Method**: Custom batch normalization layers are used to standardize `Input Surface` and `Query Point` features, while separate normalization layers adjust `Market Features`.
+   - **Data Integrity**: Ensures non-numeric data like `Datetime` and `Symbol` are preserved unchanged, maintaining essential information for modeling.
+
+
 #### Input Embedding Section
 
 1. **Surface Embedding Block**:
@@ -71,6 +84,56 @@ This project aims to create a transformer-based model for modeling implied volat
 
 - **Purpose**: Enhance model adaptability and performance.
 - **Method**: Pre-train the model on high-liquidity options, then freeze and add new components to fine-tune with new data.
+
+### Surface Preprocessing
+
+#### Dataset Creation
+
+The dataset is systematically constructed from raw options trading data, which captures key variables such as log moneyness, time to maturity, implied volatility, and relevant market features.
+
+##### Clustering and Masking
+
+To simulate real-world scenarios where all data points might not be available:
+
+1. **Clustering**:
+   - Surfaces are divided based on unique datetime and symbol combinations, followed by clustering the points within each surface. This helps to segment the data into meaningful groups, reflecting potential market segmentations.
+   - Mathematical formulation:
+     ```math
+     \text{labels} = \text{KMeans}(n_{\text{clusters}}, \text{random\_state}).\text{fit\_predict}(\text{data points})
+     ```
+
+2. **Masking**:
+   - Within each cluster, a random subset of points is masked, simulating missing data. This prepares the model to infer missing information effectively.
+   - Proportional masking varies to challenge the model under different scenarios:
+     ```math
+     \text{masked indices} = \text{random choice}(\text{cluster indices}, \text{mask proportion})
+     ```
+
+##### Proportional Sampling
+
+Adjusting the proportion of masked data across training instances allows the model to adapt to various levels of data availability, enhancing its robustness and predictive capabilities.
+
+#### Custom Batch Normalization
+
+To ensure that the model inputs are normalized and stable for training:
+
+1. **Feature Normalization**:
+   - Each feature, including log moneyness, time to maturity, and implied volatility, is normalized across the batch to ensure zero mean and unit variance, essential for effective model training.
+   - Batch normalization is applied separately to the concatenated features of `Input Surface` and `Query Point`:
+     ```math
+     \text{norm\_feature} = \text{BatchNorm}(\text{concatenated feature})
+     ```
+
+2. **Market Features Normalization**:
+   - Market features such as return, volatility, and treasury rates are also normalized using batch normalization, catering to their dynamic ranges and distributions:
+     ```math
+     \text{norm\_market\_feature} = \text{BatchNorm1d}(\text{market feature})
+     ```
+
+3. **Preservation of Data Integrity**:
+   - Non-numeric data such as `Datetime` and `Symbol` remain unchanged to preserve essential indexing and categorical information, ensuring the contextual relevance of the model’s output.
+
+This preprocessing step ensures the dataset is not only tailored for effective learning but also mirrors the practical challenges and conditions of financial markets, preparing the model for real-world deployment.
 
 ### Input Embedding Section
 
