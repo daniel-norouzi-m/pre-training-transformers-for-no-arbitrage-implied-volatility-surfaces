@@ -1,5 +1,5 @@
 ---
-
+---
 # Transformer Model for Implied Volatility Surface Modelling
 
 ## Introduction
@@ -307,4 +307,5 @@ Maps the decoder output to the target implied volatility value using a fully con
 
 This model integrates advanced transformer techniques with market-conditioned mechanisms to enhance modelling accuracy and robustness for implied volatility surfaces. The structured approach leverages transfer learning, making it adaptable to various market conditions and specific option datasets. This project showcases a novel application of transformers in financial modeling, offering significant contributions to the field.
 
+---
 ---
