@@ -27,7 +27,7 @@ This project aims to create a transformer-based model for modeling implied volat
 
 1. **Surface Embedding Block**:
    - **Purpose**: Encode the implied volatility surface into a fixed grid.
-   - **Method**: Uses PCCN and 1x1 convolutions to embed the surface.
+   - **Method**: Uses Continuous Kernel Embedding and 1x1 convolutions to embed the surface.
    - **Additional Steps**: Adds positional encodings based on each grid point's M and T values to incorporate the temporal and moneyness structure.
 
 2. **Pre Encoder Blocks**:
@@ -85,7 +85,7 @@ This project aims to create a transformer-based model for modeling implied volat
 - **Purpose**: Enhance model adaptability and performance.
 - **Method**: Pre-train the model on high-liquidity options, then freeze and add new components to fine-tune with new data.
 
-### Surface Preprocessing
+### Dataset
 
 #### Dataset Creation
 
@@ -113,6 +113,13 @@ To simulate real-world scenarios where all data points might not be available:
 
 Adjusting the proportion of masked data across training instances allows the model to adapt to various levels of data availability, enhancing its robustness and predictive capabilities.
 
+### Input Embedding Section
+
+#### Surface Embedding Block 
+
+##### Inputs
+1. **Grid Points $\mathbf{x}_j = (M_j, T_j)$**: Reference points where the encoded values are to be computed, representing moneyness (M) and time to maturity (T).
+
 #### Custom Batch Normalization
 
 To ensure that the model inputs are normalized and stable for training:
@@ -135,59 +142,66 @@ To ensure that the model inputs are normalized and stable for training:
 
 This preprocessing step ensures the dataset is not only tailored for effective learning but also mirrors the practical challenges and conditions of financial markets, preparing the model for real-world deployment.
 
-### Input Embedding Section
-
-#### Surface Embedding Block 
-
-##### Inputs
-1. **Grid Points $\mathbf{x}_j = (M_j, T_j)$**: Reference points where the encoded values are to be computed, representing moneyness (M) and time to maturity (T).
-
 ##### Processing
-1. **Parametric Continuous Convolution**:
-   - Compute the encoded surface values $h_j$ using PCCN:
+
+1. **Surface Continuous Kernel Embedding**:
+   Compute the embedded surface values using the Elliptical RBF Kernel:
 
 ```math
-h_{j} = \sum_{i=1}^{N} g(\mathbf{y}_i - \mathbf{x}_j; \theta) \cdot f_i
+h_{j} = \sum_{i=1}^{N} k(\mathbf{y}_i - \mathbf{x}_j; \sigma) \cdot f_i
 ```
-   
-   Where $g$ is parameterized by an MLP, $\mathbf{y}_i$ are the input data points, and $f_i$ are the corresponding IV values.
 
-2. **1x1 Convolution**:
-   - Project the 1-channel encoded surface to a higher dimensional space using a 1x1 convolution:
+   Where $k$ is an elliptical radial basis function kernel, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. The kernel $k$ is defined as:
+
 ```math
-H = \text{Conv1x1}(h, \mathbf{W}_{1x1}, b)
+k(\mathbf{d}; \sigma) = \exp\left(-\frac{1}{2} \sum_{d=1}^{D} \left(\frac{d_d}{\sigma_d}\right)^2\right)
+```
+
+   Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, $D$ is the dimension of the input data (e.g., Log Moneyness, Time to Maturity), and $\sigma$ contains the learnable bandwidth parameters for each dimension, enhancing the flexibility to adapt to different scales of data features.
+
+   **Grid Point Transformation**:
+     The grid points $\mathbf{x}_j$ are created to span a regular grid within the normalized feature space. The transformation of these grid points from a uniform distribution to a more natural distribution tailored to the characteristics of financial data is performed using the inverse cumulative distribution function (CDF) of the normal distribution:
+
+```math
+\mathbf{x}_j = \text{erfinv}(2 \mathbf{u}_j - 1) \sqrt{2}
+```
+
+   Where $\mathbf{u}_j$ are uniformly distributed points on the interval (0, 1) excluding the endpoints, transformed to follow the distribution of the input features more closely.
+
+   **Embedding Calculation**:
+     The embedding for each grid point $\mathbf{x}_j$ is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point $\mathbf{y}_i$. This results in a 2D grid of embedded values, each representing a localized interpretation of the input surface, shaped by the kernel's response to the distance between grid points and data points. The final output is a 2D image-like representation where each pixel corresponds to the embedded value at a specific grid location.
+
+
+2. **Surface Projection Embedding with 1x1 Convolution and Layer Normalization**:
+   - Project the 1-channel encoded surface to a higher dimensional space using a 1x1 convolution and apply layer normalization to the embedding vector to ensure it is properly normalized:
+```math
+H = \text{LayerNorm}(\text{Conv1x1}(h, \mathbf{W}_{1x1}, b))
 ```
 
 3. **2D Positional Encoding**:
-   - Add positional encoding to the output of the 1x1 convolution. The positional encoding for each dimension M and T is defined as follows for a dimension size $d_{\text{embedding}}$:
+   - Add positional encoding to the output of the 1x1 convolution. The positional encoding for each dimension $M$ and $T$ is defined as follows for a dimension size $d_{\text{embedding}}$:
 
 ```math
-PE(M_j, T_j, 2i) = \sin\left(\frac{M_j}{10000^{4i/d_{\text{embedding}}}}\right)
+PE(M_j, T_j, 4i) = \sin\left(\frac{M_j}{\sigma_{\text{scale}}^{4i/d_{\text{embedding}}}}\right)
 ```
 ```math
-PE(M_j, T_j, 2i+1) = \cos\left(\frac{M_j}{10000^{4i/d_{\text{embedding}}}}\right)
+PE(M_j, T_j, 4i+1) = \cos\left(\frac{M_j}{\sigma_{\text{scale}}^{4i/d_{\text{embedding}}}}\right)
 ```
 ```math
-PE(M_j, T_j, 2j+\frac{d_{\text{embedding}}}{2}) = \sin\left(\frac{T_j}{10000^{4j/d_{\text{embedding}}}}\right)
+PE(M_j, T_j, 4i+2) = \sin\left(\frac{T_j}{\sigma_{\text{scale}}^{4i/d_{\text{embedding}}}}\right)
 ```
 ```math
-PE(M_j, T_j, 2j+1+\frac{d_{\text{embedding}}}{2}) = \cos\left(\frac{T_j}{10000^{4j/d_{\text{embedding}}}}\right)
+PE(M_j, T_j, 4i+3) = \cos\left(\frac{T_j}{\sigma_{\text{scale}}^{4i/d_{\text{embedding}}}}\right)
 ```
-   Where $i, j$ are integers in the range $[0, d_{\text{embedding}}/4)$.
+   Where $i$ is an integer in the range $[0, d_{\text{embedding}}/4)$, and $\sigma_{\text{scale}}$ is a learnable parameter initially set to 10000 but adjustable during training.
 
-   - The full positional encoding $\mathbf{PE}(M_j, T_j)$ is concatenated or added to the embedding vector $H$ from the 1x1 convolution for each grid point:
+   - The full positional encoding $\mathbf{PE}(M_j, T_j)$ multiplied by a learnable factor of $\alpha$ initialized to 1, is added to the embedding vector $H$ from the 1x1 convolution for each grid point and finally sent through a layer normalization:
 ```math
-H_{\text{final}} = H + \mathbf{PE}(M_j, T_j)
-```
-
-4. **Layer Normalization**:
-   - Apply layer normalization to the final embedding vector to ensure it is properly normalized for input into the subsequent transformer layers:
-```math
-H_{\text{norm}} = \text{LayerNorm}(H_{\text{final}})
+H_{\text{final}} = \text{LayerNorm}(H + \alpha \mathbf{PE}(M_j, T_j))
 ```
 
 ##### Output
-- **Encoded and Normalized Surface Embeddings $H_{\text{norm}}$**: These embeddings are now ready to be fed into the encoder blocks of the transformer.
+- **Encoded and Normalized Surface Embeddings $H_{\text{final}}$**: These embeddings are now ready to be fed into the encoder blocks of the transformer.
 
 #### Pre Encoder Blocks
 Refines the grid embeddings with dynamically generated convolutional filters and Conditional Layer Normalization (CLN).
