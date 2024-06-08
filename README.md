@@ -204,38 +204,42 @@ H_{\text{final}} = \text{LayerNorm}(H + \alpha \mathbf{PE}(M_j, T_j))
 - **Encoded and Normalized Surface Embeddings $H_{\text{final}}$**: These embeddings are now ready to be fed into the encoder blocks of the transformer.
 
 #### Pre Encoder Blocks
-Refines the grid embeddings with dynamically generated convolutional filters and Conditional Layer Normalization (CLN).
+Refines the grid embeddings using a multi-branch convolutional architecture inspired by Inception-A from Inception v3. This block is designed to capture complex feature interactions at various scales, followed by normalization and a learnable scaled residual connection to integrate the original input features effectively.
+
+**Architectural Details**:
+- **Branches**: The block consists of four distinct branches that process the input embeddings in parallel:
+  1. **1x1 Convolution Branch**: Applies a straightforward 1x1 convolution to capture local features.
+  2. **1x1 followed by 3x3 Convolution Branch**: Begins with a 1x1 convolution to reduce dimensionality, followed by a 3x3 convolution to capture spatial correlations.
+  3. **1x1 followed by two 3x3 Convolutions (5x5 equivalent)**: Utilizes a 1x1 convolution for dimensionality reduction, followed by two successive 3x3 convolutions, effectively increasing the receptive field similar to a 5x5 convolution.
+  4. **3x3 Max Pooling followed by 1x1 Convolution**: Applies a 3x3 max pooling to reduce spatial size and enhance feature extraction, followed by a 1x1 convolution to transform the pooled features.
+- Each branch includes Batch Normalization and GELU activation functions to ensure stable and non-linear transformation of features.
+
+**Concatenation and Reduction**:
+- The outputs from all branches are concatenated along the channel dimension, combining diverse feature maps into a single tensor.
+- A 1x1 convolution is then applied to reduce the concatenated features back to the original number of channels, ensuring that the output tensor matches the input dimensions for residual addition.
+
+**Residual Connection and Normalization**:
+- A learnable scaling parameter is introduced in the residual connection, allowing the model to adjust the influence of the input embeddings on the final output dynamically.
+- After adding the scaled residual to the transformed features, a GELU activation function is applied to introduce non-linearity.
+- Layer Normalization is performed across the channels, height, and width of the output tensor to normalize the features before passing to subsequent blocks.
 
 **Mathematical Formulation**:
-
-First, apply the convolutional layer conditioned on market features:
-
-```math
-\mathbf{X}_{\text{conv}} = \text{ReLU}(\mathbf{W}_{\text{conv}}(z) * \mathbf{X}_{\text{grid}} + b)
-```
-
-Where $\mathbf{W}_{\text{conv}}(z)$ represents the convolutional filters conditioned on market features.
-
-Then, apply Conditional Layer Normalization (CLN) based on the market features:
-
-```math
-\mathbf{Y} = \text{CLN}(\mathbf{X}_{\text{conv}}, z)
-```
-
-The CLN operation can be detailed as:
-
-```math
-\text{CLN}(\mathbf{X}_{\text{conv}}, z) = \gamma(z) \left(\frac{\mathbf{X}_{\text{conv}} - \mu}{\sigma}\right) + \beta(z)
-```
-
-Where $\mu$ and $\sigma$ are the mean and standard deviation of $\mathbf{X}_{\text{conv}}$, and $\gamma(z)$ and $\beta(z)$ are scale and shift parameters conditioned on market features, computed as:
-
-```math
-\gamma(z) = W_\gamma z + b_\gamma
-```
-```math
-\beta(z) = W_\beta z + b_\beta
-```
+- The transformations in each branch can be summarized as follows:
+  ```math
+  \mathbf{B}_1 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X}))) \\
+  \mathbf{B}_2 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{3\times3}(\text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X}))))))) \\
+  \mathbf{B}_3 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{3\times3}(\text{GELU}(\text{BatchNorm}(\text{Conv}_{3\times3}(\text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X})))))))))) \\
+  \mathbf{B}_4 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\text{MaxPool}_{3\times3}(\mathbf{X})))) \\
+  ```
+- Concatenation and reduction:
+  ```math
+  \mathbf{X}_{\text{concat}} = \text{Concat}(\mathbf{B}_1, \mathbf{B}_2, \mathbf{B}_3, \mathbf{B}_4) \\
+  \mathbf{X}_{\text{reduced}} = \text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X}_{\text{concat}})) \\
+  ```
+- Residual connection with learnable scale:
+  ```math
+  \mathbf{X}_{\text{output}} = \text{LayerNorm}(\text{GELU}(\mathbf{X} + \alpha \cdot \mathbf{X}_{\text{reduced}}))
+  ```
 
 ### Surface Encoding
 
@@ -262,6 +266,27 @@ Captures relationships within the encoded volatility surface using self-attentio
 ```
 ```math
 \mathbf{Y} = \text{LayerNorm}(\mathbf{X}' + \text{FFN}(\mathbf{X}'), \mathbf{E}_z)
+```
+
+Then, apply Conditional Layer Normalization (CLN) based on the market features:
+
+```math
+\mathbf{Y} = \text{CLN}(\mathbf{X}_{\text{conv}}, z)
+```
+
+The CLN operation can be detailed as:
+
+```math
+\text{CLN}(\mathbf{X}_{\text{conv}}, z) = \gamma(z) \left(\frac{\mathbf{X}_{\text{conv}} - \mu}{\sigma}\right) + \beta(z)
+```
+
+Where $\mu$ and $\sigma$ are the mean and standard deviation of $\mathbf{X}_{\text{conv}}$, and $\gamma(z)$ and $\beta(z)$ are scale and shift parameters conditioned on market features, computed as:
+
+```math
+\gamma(z) = W_\gamma z + b_\gamma
+```
+```math
+\beta(z) = W_\beta z + b_\beta
 ```
 
 ### Query Embedding Section
