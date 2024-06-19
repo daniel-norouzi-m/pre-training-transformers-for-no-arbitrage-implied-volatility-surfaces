@@ -2,88 +2,61 @@
 ---
 # Transformer Model for Implied Volatility Surface Modelling
 
-## Introduction
+### Introduction
 
-This project aims to create a transformer-based model for modeling implied volatility surfaces, uniquely incorporating key market features such as VIX, S&P returns, and asset returns., and ensuring adherence to no-arbitrage constraints. The model uses advanced techniques such as Conditional Layer Normalization (CLN), parametric continuous convolutional networks (PCCN), and a Gaussian Error Linear Unit (GELU) activation function. The project also employs transfer learning to enhance model performance and adaptability. Pre-trained on high-liquidity options, this model exemplifies the power of transfer learning in financial modeling, allowing seamless fine-tuning for specific, less liquid options to deliver precise and reliable predictions.
+This project aims to create a transformer-based model for modeling implied volatility surfaces, uniquely incorporating key market features such as VIX, S&P returns, and treasury rates, and ensuring adherence to no-arbitrage constraints. The project also employs transfer learning to enhance model performance and adaptability. Pre-trained on high-liquidity options, this model exemplifies the power of transfer learning in financial modeling, allowing seamless fine-tuning for specific, less liquid options to deliver precise and reliable predictions.
 
 ## Model Pipeline
 
-![image](https://github.com/daniel-norouzi-m/implied-volatility-surface-with-flow-based-generative-models/assets/108014662/060efec1-8ed4-4300-98c4-d08d03a073b1)
+#### Dataset
 
-#### Surface Preprocessing
+- **Dataset Creation**: Constructed from raw options trading data capturing key variables.
+- **Clustering and Masking**: 
+  - Clustering surfaces by datetime and symbol, segmenting data meaningfully.
+  - Masking random subsets of points within clusters to simulate missing data.
 
-1. **Dataset Creation**:
-   - **Purpose**: Construct a dataset from raw options data that includes varying market conditions and data completeness.
-   - **Method**: Features such as log moneyness, time to maturity, and implied volatility are used along with market features. Data points are clustered and selectively masked to simulate incomplete data scenarios, training the model to predict missing information.
-   - **Proportional Sampling**: Implements variable masking proportions to simulate different levels of data availability, enhancing the model's robustness and ability to generalize.
+#### Input Embedding
 
-2. **Custom Batch Normalization**:
-   - **Purpose**: Normalize features across the dataset to stabilize neural network training.
-   - **Method**: Custom batch normalization layers are used to standardize `Input Surface` and `Query Point` features, while separate normalization layers adjust `Market Features`.
-   - **Data Integrity**: Ensures non-numeric data like `Datetime` and `Symbol` are preserved unchanged, maintaining essential information for modeling.
+- **Surface Embedding Block**: 
+  - Embeds surface values using Elliptical RBF Kernel.
+  - Applies custom batch normalization for feature stability.
+  - Projects to higher-dimensional space using 1x1 convolution and layer normalization.
+  - Adds 2D positional encoding for embedding vectors.
 
+#### Surface Encoding
 
-#### Input Embedding Section
+- **Encoder Blocks**: 
+  - Utilizes self-attention mechanisms, external attention with market features, and feed-forward networks.
+  - Applies residual connections and layer normalization to refine surface embeddings.
 
-1. **Surface Embedding Block**:
-   - **Purpose**: Encode the implied volatility surface into a fixed grid.
-   - **Method**: Uses Continuous Kernel Embedding and 1x1 convolutions to embed the surface.
-   - **Additional Steps**: Adds positional encodings based on each grid point's M and T values to incorporate the temporal and moneyness structure.
+#### Query Embedding
 
-2. **Pre Encoder Blocks**:
-   - **Purpose**: Refine the grid embeddings to prepare for the encoder blocks.
-   - **Method**: Utilizes dynamically generated convolutional filters (conditioned on market features and grid point M and T values) and Conditional Layer Normalization (CLN) with residual connections.
-   - **Structure**: Multiple blocks can be stacked to enhance the representation.
-
-#### Surface Encoding Section
-
-1. **Encoder Blocks**:
-   - **Purpose**: Capture relationships within the encoded volatility surface.
-   - **Method**: Uses conditional self-attention mechanisms and feed-forward layers, along with CLN and residual connections.
-   - **Structure**: Multiple blocks can be stacked to deepen the model's capacity.
-
-#### Query Embedding Section
-
-1. **Query Embedding Block**:
-   - **Purpose**: Process the query point input.
-   - **Method**: Uses a learnable embedding for the query point (similar to the [MASK] token in NLP), adding positional encoding specific to the query point.
-
-2. **Pre Decoder Blocks**:
-   - **Purpose**: Enhance query point embeddings with market features.
-   - **Method**: Similar to pre encoder blocks, but focused on query point embeddings.
-   - **Structure**: Multiple blocks can be stacked for richer embedding refinement.
+- **Point Embedding**: 
+  - Generates embeddings for query points using learnable and positional encodings.
+  - Refines embeddings through pre-decoder blocks with feed-forward networks and residual normalization.
 
 #### Surface Decoding
 
-1. **Decoder Blocks**:
-   - **Purpose**: Generate outputs by attending to encoded surface data and conditioned query points.
-   - **Method**: Uses conditional cross-attention mechanisms and CLN with residual connections.
-   - **Additional Features**: Stores cross-attention weights for later visual analysis using Gaussian kernel smoothing.
-   - **Structure**: Multiple blocks can be stacked to increase the model's depth.
+- **Decoder Blocks**: 
+  - Processes query embeddings and encoded surface data using cross-attention mechanisms and feed-forward networks.
+  - Refines query embeddings for final prediction tasks.
 
-2. **Output Mapping Block**:
-   - **Purpose**: Map decoder outputs to implied volatility values.
-   - **Method**: Uses a fully connected layer to produce the final output.
+#### Output Mapping
 
-#### Soft No-Arbitrage Constraints
+- **Fully Connected Layer**: Maps decoder output to target implied volatility values.
 
-1. **Calendar Spread Constraint**:
-   - **Purpose**: Ensure that implied volatilities do not decrease with increasing maturity.
-   - **Method**: Utilizes relevant formulas with derivatives calculated using autograd.
+#### Surface Arbitrage Free Loss
 
-2. **Butterfly Spread Constraint**:
-   - **Purpose**: Ensure convexity of the implied volatility surface.
-   - **Method**: Utilizes relevant formulas with derivatives calculated using autograd.
+- **Overview**: Ensures model predictions adhere to no-arbitrage conditions using soft constraints in the loss function.
+- **Loss Components**:
+  - **MSE Loss**: Measures the difference between model estimates and target volatilities.
+  - **Calendar Arbitrage Condition**: Ensures total implied variance does not decrease with time.
+  - **Butterfly Arbitrage Condition**: Prevents butterfly arbitrage in the volatility surface.
+  - **Total Loss Calculation**: Combines MSE loss with arbitrage constraints, weighted by predefined coefficients. 
 
-#### Activation Function
+This approach ensures that the model predictions are not only accurate but also theoretically sound and robust against arbitrage opportunities.
 
-- **GELU (Gaussian Error Linear Unit)**:
-  - **Usage**: Applied throughout the model for non-linear transformations, providing smoother and more effective activation compared to ReLU.
-
-#### Transfer Learning
-
-- **Purpose**: Enhance model adaptability and performance.
-- **Method**: Pre-train the model on high-liquidity options, then freeze and add new components to fine-tune with new data.
+![image](https://github.com/daniel-norouzi-m/implied-volatility-surface-with-flow-based-generative-models/assets/108014662/060efec1-8ed4-4300-98c4-d08d03a073b1)
 
 ### Dataset
 
@@ -389,6 +362,51 @@ Maps the decoder output to the target implied volatility value using a fully con
 ```math
 \text{IV}_{\text{pred}} = \text{FC}(\mathbf{Y}_{\text{final}})
 ```
+
+### Surface Arbitrage Free Loss
+
+#### Overview
+
+The Surface Arbitrage Free Loss module is designed to ensure that the model's predictions of implied volatility surfaces adhere to no-arbitrage conditions. By incorporating these conditions as soft constraints in the loss function, the model minimizes the potential for generating arbitrage opportunities, thereby improving the reliability and robustness of its predictions. This module calculates the total loss, which includes the mean squared error (MSE) between the model's predictions and the actual target volatilities, along with the soft constraint losses for calendar and butterfly arbitrage conditions. Gradient calculations necessary for these arbitrage conditions are efficiently handled using Torch's automatic differentiation (autograd) capabilities.
+
+#### Loss Components
+
+1. **Mean Squared Error (MSE) Loss**:
+   - Measures the difference between the model's implied volatility estimates and the actual target volatilities.
+   - Formulated as:
+     ```math
+     \text{MSE Loss} = \frac{1}{N} \sum_{i=1}^{N} (\sigma_{\text{estimated}} - \sigma_{\text{target}})^2
+     ```
+   - Where \(\sigma_{\text{estimated}}\) is the implied volatility predicted by the model, and \(\sigma_{\text{target}}\) is the actual implied volatility from the dataset.
+
+2. **Calendar Arbitrage Condition**:
+   - Ensures that the total implied variance \(w(X, t) = t \cdot \sigma^2(X, t)\) does not decrease with respect to time to maturity.
+   - Mathematically represented as:
+     ```math
+     L_{cal} = \left\| \max \left( 0, -\frac{\partial w}{\partial t} \right) \right\|^2
+     ```
+
+3. **Butterfly Arbitrage Condition**:
+   - Ensures that the implied volatility surface does not exhibit butterfly arbitrage.
+   - Defined as:
+     ```math
+     g(X, t) = \left( 1 - \frac{X w'}{2w} \right)^2 - \frac{w'}{4} \left( \frac{1}{w} + \frac{1}{4} \right) + \frac{w''}{2}
+     ```
+   - The butterfly arbitrage loss is then calculated as:
+     ```math
+     L_{but} = \left\| \max (0, -g) \right\|^2
+     ```
+
+4. **Total Loss Calculation**:
+   - The total loss combines the MSE loss with the arbitrage constraints, weighted by predefined coefficients using \(\lambda_{cal}\) and \(\lambda_{but}\) for calendar and butterfly conditions, respectively.
+   - Formulated as:
+     ```math
+     \text{Total Loss} = \text{MSE Loss} + \lambda_{cal} \cdot L_{cal} + \lambda_{but} \cdot L_{but}
+     ```
+   - These coefficients are configured to balance the influence of each component on the model's training process, ensuring both predictive accuracy and adherence to financial theory.
+
+This comprehensive approach to loss calculation helps train models that not only fit the data well but also respect crucial financial principles, contributing to more robust and dependable predictions in practical applications.
+
 
 ## Summary
 
