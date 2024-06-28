@@ -407,6 +407,144 @@ The Surface Arbitrage Free Loss module is designed to ensure that the model's pr
 
 This comprehensive approach to loss calculation helps train models that not only fit the data well but also respect crucial financial principles, contributing to more robust and dependable predictions in practical applications.
 
+## Architecture Search
+
+This section explains how to find the optimal architecture without training by using rank scores of the NTK condition number and the Fisher-Rao norm at initialization.
+
+#### NTK Condition Number
+
+The Neural Tangent Kernel (NTK) condition number measures the stability of the network during training. At initialization, we compute the NTK \(\Theta\) and its condition number \(\kappa(\Theta)\):
+
+```math
+\Theta(x, x') = \nabla_\theta f(x; \theta)^\top \nabla_\theta f(x'; \theta)
+```
+
+The condition number is given by the ratio of the largest to the smallest eigenvalue of the NTK:
+
+```math
+\kappa(\Theta) = \frac{\lambda_{\max}(\Theta)}{\lambda_{\min}(\Theta)}
+```
+
+#### Fisher-Rao Norm
+
+The Fisher-Rao norm measures the expressivity of the model by quantifying the sensitivity of the output distribution with respect to parameter changes:
+
+```math
+F(\theta) = \mathbb{E} \left[ \left( \frac{\partial \log p(X; \theta)}{\partial \theta} \right) \left( \frac{\partial \log p(X; \theta)}{\partial \theta} \right)^\top \right]
+```
+
+The Fisher-Rao norm is calculated as:
+
+```math
+\| \theta \|_{\text{FR}} = \sqrt{\theta^\top F(\theta) \theta}
+```
+
+#### Ranking and Selection
+
+Architectures are ranked based on their NTK condition number and Fisher-Rao norm. The optimal architecture minimizes the NTK condition number and maximizes the Fisher-Rao norm:
+
+```math
+R_C(i) = \alpha R_{\kappa}(i) + (1 - \alpha) R_{\text{FR}}(i)
+```
+
+where \(R_{\kappa}(i)\) and \(R_{\text{FR}}(i)\) are the rankings based on the NTK condition number and Fisher-Rao norm, respectively, and \(\alpha\) is a weight balancing the two criteria.
+
+## Evaluating the Trained Model
+
+This section describes the evaluation of the trained model for robustness, sensitivity, trainability, and expressivity.
+
+#### Gradients and Hessians
+
+The gradients and Hessians of the loss function with respect to model parameters and input features (initial embedded surface grid and external features) are computed.
+
+- **Gradient Norm**:
+  ```math
+  \|\nabla_{\theta} L\|_2 = \sqrt{\sum_{i=1}^p \left( \frac{\partial L}{\partial \theta_i} \right)^2}
+  ```
+
+- **Hessian Condition Number**:
+  ```math
+  H = \left[ \frac{\partial^2 L}{\partial \theta_i \partial \theta_j} \right]
+  ```
+  ```math
+  \kappa(H) = \frac{\lambda_{\max}(H)}{\lambda_{\min}(H)}
+  ```
+
+#### NTK Condition Number and Trace
+
+For the final model, compute the NTK and its condition number and trace:
+
+```math
+\Theta(x, x') = \nabla_\theta f(x; \theta)^\top \nabla_\theta f(x'; \theta)
+```
+
+- **Condition Number**:
+  ```math
+  \kappa(\Theta) = \frac{\lambda_{\max}(\Theta)}{\lambda_{\min}(\Theta)}
+  ```
+
+- **Trace**:
+  ```math
+  \text{Tr}(\Theta) = \sum_{i=1}^{n} \lambda_i(\Theta)
+  ```
+
+#### Fisher-Rao Norm
+
+Compute the Fisher-Rao norm for the final model:
+
+```math
+\| \theta \|_{\text{FR}} = \sqrt{\theta^\top F(\theta) \theta}
+```
+
+## Component Analysis
+
+Analyze each component of the trained model using gradients, Hessians, NTK, and Fisher-Rao norm.
+
+#### Gradients and Hessians
+
+- **Gradient Norm**:
+  ```math
+  \|\nabla_{\theta^l} L\|_2 = \sqrt{\sum_{i=1}^p \left( \frac{\partial L}{\partial \theta^l_i} \right)^2}
+  ```
+
+- **Hessian Condition Number**:
+  ```math
+  H^l = \left[ \frac{\partial^2 L}{\partial \theta^l_i \partial \theta^l_j} \right]
+  ```
+  ```math
+  \kappa(H^l) = \frac{\lambda_{\max}(H^l)}{\lambda_{\min}(H^l)}
+  ```
+
+#### NTK Condition Number and Trace
+
+For each component, compute the NTK and its condition number and trace:
+
+```math
+\Theta^l(x, x') = \nabla_{\theta^l} f(x; \theta^l)^\top \nabla_{\theta^l} f(x'; \theta^l)
+```
+
+- **Condition Number**:
+  ```math
+  \kappa(\Theta^l) = \frac{\lambda_{\max}(\Theta^l)}{\lambda_{\min}(\Theta^l)}
+  ```
+
+- **Trace**:
+  ```math
+  \text{Tr}(\Theta^l) = \sum_{i=1}^{n} \lambda_i(\Theta^l)
+  ```
+
+#### Fisher-Rao Norm
+
+Compute the Fisher-Rao norm for each component:
+
+```math
+\| \theta^l \|_{\text{FR}} = \sqrt{\theta^l^\top F^l(\theta^l) \theta^l}
+```
+
+## Out of Sample and Stress Testing
+
+Perform out-of-sample and stress testing by creating sequential blocks of data used as train and test sets, applying De Prado's embargo method to prevent leakage from autocorrelation. Report the out-of-sample results (MSE, MAE, calendar arbitrage, butterfly arbitrage) for the entire test set and for test blocks considered as stress times.
+
 
 ## Summary
 
