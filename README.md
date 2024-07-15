@@ -118,14 +118,9 @@ This preprocessing step ensures the dataset is not only tailored for effective l
 ##### Processing
 
 1. **Surface Continuous Kernel Embedding**:
-   Compute the embedded surface values using multiple RBF Kernels with different fixed bandwidths:
+Compute the embedded surface values using multiple RBF Kernels with different fixed bandwidths: The embedding for each grid point is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple RBF kernels, resulting in a multi-channel representation.
 
-   - The embedding for each grid point is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple RBF kernels, resulting in a multi-channel representation.
-
-   - **Fixed Bandwidth Calculation**:
-     Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$.
-
-   - Mathematically, for each RBF kernel:
+**Fixed Bandwidth Calculation**: Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$. Mathematically, for each RBF kernel, where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel:
      
 ```math
 h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
@@ -134,17 +129,12 @@ h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
 ```math
 k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\right)^2\right)
 ```
-      
-- Where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel.
 
-   **Grid Point Transformation**:
-     The grid points $\mathbf{x}_j$ are created to span a regular grid within the normalized feature space. The transformation of these grid points from a uniform distribution to a more natural distribution tailored to the characteristics of financial data is performed using the inverse cumulative distribution function (CDF) of the normal distribution:
+**Grid Point Transformation**: The grid points $\mathbf{x}_j$ are created to span a regular grid within the normalized feature space. The transformation of these grid points from a uniform distribution to a more natural distribution tailored to the characteristics of financial data is performed using the inverse cumulative distribution function (CDF) of the normal distribution, where $\mathbf{u}_j$ are uniformly distributed points on the interval (0, 1) excluding the endpoints, transformed to follow the distribution of the input features more closely.:
 
 ```math
 \mathbf{x}_j = \text{erfinv}(2 \mathbf{u}_j - 1) \sqrt{2}
 ```
-
-     Where $\mathbf{u}_j$ are uniformly distributed points on the interval (0, 1) excluding the endpoints, transformed to follow the distribution of the input features more closely.
 
    **Embedding Calculation**:
      The embedding for each grid point $\mathbf{x}_j$ is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple RBF kernels. This results in a multi-channel grid of embedded values, each representing a localized interpretation of the input surface, shaped by the kernels' responses to the distances between grid points and data points. The final output is a multi-channel image-like representation where each channel corresponds to the embedded value at a specific grid location using a different RBF kernel.
@@ -155,16 +145,6 @@ k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\r
  ```math
  H = \text{LayerNorm}(H_{\text{multi-channel}})
  ```
-
-   This multi-channel embedded surface is now ready for subsequent processing in the model pipeline.
-
-
-3. **Surface Projection Embedding with 1x1 Convolution and Layer Normalization**:
-   - Project the 1-channel encoded surface to a higher dimensional space using a 1x1 convolution and apply layer normalization to the embedding vector to ensure it is properly normalized:
-
-```math
-H = \text{LayerNorm}(\text{Conv1x1}(h, \mathbf{W}_{1x1}, b))
-```
 
 3. **2D Positional Encoding**:
    - Add positional encoding to the output of the 1x1 convolution. The positional encoding for each dimension $M$ and $T$ is defined as follows for a dimension size $d_{\text{embedding}}$:
@@ -242,36 +222,36 @@ Each encoder block within the Surface Encoding module performs the following ope
 1. **Self-Attention**:
    - Captures dependencies between different positions in the surface embedding.
    - Mathematically represented as:
-     ```math
-     \text{SA}(X) = \text{softmax}\left(\frac{XQ (XK)^T}{\sqrt{d_k}}\right) XV
-     ```
+```math
+\text{SA}(X) = \text{softmax}\left(\frac{XQ (XK)^T}{\sqrt{d_k}}\right) XV
+```
    - Where $X$ is the input sequence, $Q$, $K$, and $V$ are the query, key, and value projections of $X$, respectively.
 
 2. **Residual Connection and Layer Normalization**:
    - Applies a scaled residual connection followed by layer normalization:
-     ```math
-     X = \text{LayerNorm}(X + \alpha \cdot \text{SA}(X))
-     ```
+```math
+X = \text{LayerNorm}(X + \alpha \cdot \text{SA}(X))
+```
    - $\alpha$ is a learnable scaling factor to modulate the contribution of the self-attention output.
 
 3. **Feed-Forward Network**:
    - A two-layer network with GELU activation and dropout applied between layers:
-     ```math
-     \text{FFN}(X) = W_2 \cdot \text{GELU}(W_1X + b_1) + b_2
-     ```
+```math
+\text{FFN}(X) = W_2 \cdot \text{GELU}(W_1X + b_1) + b_2
+```
 
 4. **External Attention**:
    - Incorporates external market features into the encoding process:
-     ```math
-     \text{EA}(X, M) = \text{softmax}\left(\frac{XQ (MK)^T}{\sqrt{d_k}}\right) MV
-     ```
+```math
+\text{EA}(X, M) = \text{softmax}\left(\frac{XQ (MK)^T}{\sqrt{d_k}}\right) MV
+```
    - $M$ denotes the external market features, treated as additional key and value inputs to the attention mechanism.
 
 5. **Final Residual Connection and Layer Normalization**:
    - Similar to step 2, integrates the external attention output:
-     ```math
-     X = \text{LayerNorm}(X + \alpha \cdot \text{EA}(X, M))
-     ```
+```math
+X = \text{LayerNorm}(X + \alpha \cdot \text{EA}(X, M))
+```
 
 #### Sequential Processing
 
@@ -299,9 +279,9 @@ The Point Embedding component performs the following operations:
 
 3. **Scaled Residual Norm**:
    - Combines the learnable embedding and positional encoding using a scaled residual norm:
-     ```math
-     \mathbf{Q}_{\text{final}} = \text{LayerNorm}(\mathbf{Q} + \alpha \cdot \text{PE}(\mathbf{q}_j))
-     ```
+```math
+\mathbf{Q}_{\text{final}} = \text{LayerNorm}(\mathbf{Q} + \alpha \cdot \text{PE}(\mathbf{q}_j))
+```
    - Ensures the query embeddings are normalized and properly scaled.
 
 #### Pre-Decoder Blocks
@@ -310,15 +290,15 @@ Each pre-decoder block refines the query embeddings further:
 
 1. **Feed-Forward Network**:
    - A two-layer feed-forward network with GELU activation and dropout:
-     ```math
-     \text{FFN}(\mathbf{Q}) = W_2 \cdot \text{GELU}(W_1 \mathbf{Q} + b_1) + b_2
-     ```
+```math
+\text{FFN}(\mathbf{Q}) = W_2 \cdot \text{GELU}(W_1 \mathbf{Q} + b_1) + b_2
+```
 
 2. **Residual Connection and Layer Normalization**:
    - Applies a scaled residual connection followed by layer normalization:
-     ```math
-     \mathbf{Q} = \text{LayerNorm}(\mathbf{Q} + \alpha \cdot \text{FFN}(\mathbf{Q}))
-     ```
+```math
+\mathbf{Q} = \text{LayerNorm}(\mathbf{Q} + \alpha \cdot \text{FFN}(\mathbf{Q}))
+```
 
 #### Sequential Processing
 
@@ -342,27 +322,27 @@ Each decoder block within the Surface Decoding module performs the following ope
    - Captures dependencies between the query embeddings and the encoded surface data.
    - The query embeddings serve as the query ($Q$), while the encoded surface data serves as the keys ($K$) and values ($V$).
    - Mathematically represented as:
-     ```math
-     \text{CA}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right) V
-     ```
+```math
+\text{CA}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right) V
+```
 
 2. **Residual Connection and Layer Normalization**:
    - Applies a scaled residual connection followed by layer normalization:
-     ```math
-     Q = \text{LayerNorm}(Q + \alpha \cdot \text{CA}(Q, K, V))
-     ```
+```math
+Q = \text{LayerNorm}(Q + \alpha \cdot \text{CA}(Q, K, V))
+```
 
 3. **Feed-Forward Network**:
    - A two-layer feed-forward network with GELU activation and dropout:
-     ```math
-     \text{FFN}(Q) = W_2 \cdot \text{GELU}(W_1 Q + b_1) + b_2
-     ```
+```math
+\text{FFN}(Q) = W_2 \cdot \text{GELU}(W_1 Q + b_1) + b_2
+```
 
 4. **Final Residual Connection and Layer Normalization**:
    - Similar to the previous residual connection, applies scaled residual connection and layer normalization:
-     ```math
-     Q = \text{LayerNorm}(Q + \alpha \cdot \text{FFN}(Q))
-     ```
+```math
+Q = \text{LayerNorm}(Q + \alpha \cdot \text{FFN}(Q))
+```
 
 #### Sequential Processing
 
@@ -389,35 +369,35 @@ The Surface Arbitrage Free Loss module is designed to ensure that the model's pr
 1. **Mean Squared Error (MSE) Loss**:
    - Measures the difference between the model's implied volatility estimates and the actual target volatilities.
    - Formulated as:
-     ```math
-     \text{MSE Loss} = \frac{1}{N} \sum_{i=1}^{N} (\sigma_{\text{estimated}} - \sigma_{\text{target}})^2
-     ```
+```math
+\text{MSE Loss} = \frac{1}{N} \sum_{i=1}^{N} (\sigma_{\text{estimated}} - \sigma_{\text{target}})^2
+```
    - Where $\sigma_{\text{estimated}}$ is the implied volatility predicted by the model, and $\sigma_{\text{target}}$ is the actual implied volatility from the dataset.
 
 2. **Calendar Arbitrage Condition**:
    - Ensures that the total implied variance $w(X, t) = t \cdot \sigma^2(X, t)$ does not decrease with respect to time to maturity.
    - Mathematically represented as:
-     ```math
-     L_{cal} = \left\| \max \left( 0, -\frac{\partial w}{\partial t} \right) \right\|^2
-     ```
+```math
+L_{cal} = \left\| \max \left( 0, -\frac{\partial w}{\partial t} \right) \right\|^2
+```
 
 3. **Butterfly Arbitrage Condition**:
    - Ensures that the implied volatility surface does not exhibit butterfly arbitrage.
    - Defined as:
-     ```math
-     g(X, t) = \left( 1 - \frac{X w'}{2w} \right)^2 - \frac{w'}{4} \left( \frac{1}{w} + \frac{1}{4} \right) + \frac{w''}{2}
-     ```
+```math
+g(X, t) = \left( 1 - \frac{X w'}{2w} \right)^2 - \frac{w'}{4} \left( \frac{1}{w} + \frac{1}{4} \right) + \frac{w''}{2}
+```
    - The butterfly arbitrage loss is then calculated as:
-     ```math
-     L_{but} = \left\| \max (0, -g) \right\|^2
-     ```
+```math
+L_{but} = \left\| \max (0, -g) \right\|^2
+```
 
 4. **Total Loss Calculation**:
    - The total loss combines the MSE loss with the arbitrage constraints, weighted by predefined coefficients using $\lambda_{cal}$ and $\lambda_{but}$ for calendar and butterfly conditions, respectively.
    - Formulated as:
-     ```math
-     \text{Total Loss} = \text{MSE Loss} + \lambda_{cal} \cdot L_{cal} + \lambda_{but} \cdot L_{but}
-     ```
+```math
+\text{Total Loss} = \text{MSE Loss} + \lambda_{cal} \cdot L_{cal} + \lambda_{but} \cdot L_{but}
+```
    - These coefficients are configured to balance the influence of each component on the model's training process, ensuring both predictive accuracy and adherence to financial theory.
 
 This comprehensive approach to loss calculation helps train models that not only fit the data well but also respect crucial financial principles, contributing to more robust and dependable predictions in practical applications.
@@ -552,8 +532,9 @@ For each component, compute the NTK and its condition number and trace:
 
 Compute the Fisher-Rao norm for each component:
 
+
 ```math
-\| \theta^l \|_{\text{FR}} = \sqrt{\theta^l^\top F^l(\theta^l) \theta^l}
+\| \theta^l \|_{\text{FR}} = \sqrt{{\theta^l}^\top F^l(\theta^l) \theta^l} 
 ```
 
 ## Out of Sample and Stress Testing
