@@ -130,16 +130,12 @@ This preprocessing step ensures the dataset is not only tailored for effective l
 ```math
 h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
 ```
-
-     Where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values.
-
-     The RBF kernel $k_{k}$ is defined as:
      
 ```math
 k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\right)^2\right)
 ```
-
-     Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel.
+      
+- Where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel.
 
    **Grid Point Transformation**:
      The grid points $\mathbf{x}_j$ are created to span a regular grid within the normalized feature space. The transformation of these grid points from a uniform distribution to a more natural distribution tailored to the characteristics of financial data is performed using the inverse cumulative distribution function (CDF) of the normal distribution:
