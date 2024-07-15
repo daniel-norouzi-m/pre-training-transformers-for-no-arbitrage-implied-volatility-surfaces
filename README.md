@@ -127,26 +127,26 @@ This preprocessing step ensures the dataset is not only tailored for effective l
 
    - Mathematically, for each RBF kernel:
      
-     ```math
-     h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
-     ```
+```math
+h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
+```
 
      Where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values.
 
      The RBF kernel $k_{k}$ is defined as:
      
-     ```math
-     k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\right)^2\right)
-     ```
+```math
+k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\right)^2\right)
+```
 
      Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel.
 
    **Grid Point Transformation**:
      The grid points $\mathbf{x}_j$ are created to span a regular grid within the normalized feature space. The transformation of these grid points from a uniform distribution to a more natural distribution tailored to the characteristics of financial data is performed using the inverse cumulative distribution function (CDF) of the normal distribution:
 
-     ```math
-     \mathbf{x}_j = \text{erfinv}(2 \mathbf{u}_j - 1) \sqrt{2}
-     ```
+```math
+\mathbf{x}_j = \text{erfinv}(2 \mathbf{u}_j - 1) \sqrt{2}
+```
 
      Where $\mathbf{u}_j$ are uniformly distributed points on the interval (0, 1) excluding the endpoints, transformed to follow the distribution of the input features more closely.
 
@@ -156,9 +156,9 @@ This preprocessing step ensures the dataset is not only tailored for effective l
    **Normalization**:
    After computing the embeddings using multiple RBF kernels, layer normalization is applied across the channels, height, and width dimensions to ensure stability and consistency in the feature distributions:
 
-   ```math
-   H = \text{LayerNorm}(H_{\text{multi-channel}})
-   ```
+ ```math
+ H = \text{LayerNorm}(H_{\text{multi-channel}})
+ ```
 
    This multi-channel embedded surface is now ready for subsequent processing in the model pipeline.
 
