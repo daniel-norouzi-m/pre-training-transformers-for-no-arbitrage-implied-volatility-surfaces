@@ -126,13 +126,15 @@ This preprocessing step ensures the dataset is not only tailored for effective l
      Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$.
 
    - Mathematically, for each RBF kernel:
+     
      ```math
      h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
      ```
 
-     Where $ k_{k} $ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values.
+     Where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values.
 
-     The RBF kernel $ k_{k} $ is defined as:
+     The RBF kernel $k_{k}$ is defined as:
+     
      ```math
      k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\right)^2\right)
      ```
@@ -153,15 +155,17 @@ This preprocessing step ensures the dataset is not only tailored for effective l
 
    **Normalization**:
    After computing the embeddings using multiple RBF kernels, layer normalization is applied across the channels, height, and width dimensions to ensure stability and consistency in the feature distributions:
-     ```math
-     H = \text{LayerNorm}(H_{\text{multi-channel}})
-     ```
+
+   ```math
+   H = \text{LayerNorm}(H_{\text{multi-channel}})
+   ```
 
    This multi-channel embedded surface is now ready for subsequent processing in the model pipeline.
 
 
-2. **Surface Projection Embedding with 1x1 Convolution and Layer Normalization**:
+3. **Surface Projection Embedding with 1x1 Convolution and Layer Normalization**:
    - Project the 1-channel encoded surface to a higher dimensional space using a 1x1 convolution and apply layer normalization to the embedding vector to ensure it is properly normalized:
+
 ```math
 H = \text{LayerNorm}(\text{Conv1x1}(h, \mathbf{W}_{1x1}, b))
 ```
