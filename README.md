@@ -56,27 +56,25 @@ This project aims to create a transformer-based model for modeling implied volat
 
 This approach ensures that the model predictions are not only accurate but also theoretically sound and robust against arbitrage opportunities.
 
-![image](https://github.com/daniel-norouzi-m/implied-volatility-surface-with-flow-based-generative-models/assets/108014662/060efec1-8ed4-4300-98c4-d08d03a073b1)
-
 ### Dataset
 
 #### Dataset Creation
 
 The dataset is systematically constructed from raw options trading data, which captures key variables such as log moneyness, time to maturity, implied volatility, and relevant market features.
 
-##### Clustering and Masking
+##### Dynamic Clustering and Masking
 
-To simulate real-world scenarios where all data points might not be available:
+To simulate real-world scenarios where all data points might not be available, dynamic clustering and masking are performed during batch creation instead of preprocessing:
 
 1. **Clustering**:
-   - Surfaces are divided based on unique datetime and symbol combinations, followed by clustering the points within each surface. This helps to segment the data into meaningful groups, reflecting potential market segmentations.
+   - Surfaces are divided based on unique datetime and symbol combinations, followed by clustering the points within each surface during batch creation. This helps to segment the data into meaningful groups, reflecting potential market segmentations.
    - Mathematical formulation:
      ```math
      \text{labels} = \text{KMeans}(n_{\text{clusters}}, \text{random\_state}).\text{fit\_predict}(\text{data points})
      ```
 
-2. **Masking**:
-   - Within each cluster, a random subset of points is masked, simulating missing data. This prepares the model to infer missing information effectively.
+2. **Dynamic Masking**:
+   - Within each cluster, a random subset of points is masked dynamically every time a surface is fed to the model. This prepares the model to infer missing information effectively.
    - Proportional masking varies to challenge the model under different scenarios:
      ```math
      \text{masked indices} = \text{random choice}(\text{cluster indices}, \text{mask proportion})
@@ -84,14 +82,15 @@ To simulate real-world scenarios where all data points might not be available:
 
 ##### Proportional Sampling
 
-Adjusting the proportion of masked data across training instances allows the model to adapt to various levels of data availability, enhancing its robustness and predictive capabilities.
+Adjusting the proportion of masked data across training epochs allows the model to adapt to various levels of data availability, enhancing its robustness and predictive capabilities. This dynamic approach ensures that the model consistently encounters new patterns of missing data, promoting greater generalization and adaptability.
 
-### Input Embedding Section
 
-#### Surface Embedding Block 
+### Surface Embedding Section
+
+#### Surface Embedding Section 
 
 ##### Inputs
-1. **Grid Points $\mathbf{x}_j = (M_j, T_j)$**: Reference points where the encoded values are to be computed, representing moneyness (M) and time to maturity (T).
+1. **Surface Points $\mathbf{x}_j = (M_j, T_j)$**: Available surface points with coordinates representing moneyness (M) and time to maturity (T) and their corresponding implied volatilities (IV).
 
 #### Custom Batch Normalization
 
@@ -118,35 +117,30 @@ This preprocessing step ensures the dataset is not only tailored for effective l
 ##### Processing
 
 1. **Surface Continuous Kernel Embedding**:
-Compute the embedded surface values using multiple RBF Kernels with different fixed bandwidths: The embedding for each grid point is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple RBF kernels, resulting in a multi-channel representation.
+Compute the embedded surface values using multiple Elliptical RBF Kernels with different fixed bandwidths: The embedding for each grid point is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple elliptical RBF kernels, resulting in a multi-channel representation.
 
-**Fixed Bandwidth Calculation**: Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$. Mathematically, for each RBF kernel, where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points and grid points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel:
+**Fixed Bandwidth Calculation**: Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$. Mathematically, for each RBF kernel, where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel. Additionally, we introduce a learnable scale vector $\mathbf{s}$, initialized to 1, which serves as the diagonal scale matrix $A$ to calculate the distance $((\mathbf{y}_i - \mathbf{x}_j)^T A (\mathbf{y}_i - \mathbf{x}_j))$:
      
 ```math
-h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i - \mathbf{x}_j) \cdot f_i
+h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i, \mathbf{x}_j) \cdot f_i
 ```
      
 ```math
-k_{k}(\mathbf{d}) = \exp\left(-\frac{1}{2} \left(\frac{\mathbf{d}}{\sigma_{k}}\right)^2\right)
+k_{k}(\mathbf{x}, \mathbf{y}) = \exp\left(-\frac{(\mathbf{x} - \mathbf{y})^T \mathbf{A} (\mathbf{x} - \mathbf{y})}{2 \cdot \text{trace}(\mathbf{A})}\right)
 ```
 
-**Grid Point Transformation**: The grid points $\mathbf{x}_j$ are created to span a regular grid within the normalized feature space. The transformation of these grid points from a uniform distribution to a more natural distribution tailored to the characteristics of financial data is performed using the inverse cumulative distribution function (CDF) of the normal distribution, where $\mathbf{u}_j$ are uniformly distributed points on the interval (0, 1) excluding the endpoints, transformed to follow the distribution of the input features more closely.:
+**Embedding Calculation**:
+The embedding for each surface point is calculated by averaging the implied volatilities of all input surface points, weighted by their 2D distances using multiple elliptical RBF kernels with different bandwidths. This process is also applied to the masked points, except their IV values are masked out and not considered in the calculation. This results in a multi-channel representation where each channel corresponds to the embedded value computed using a different RBF kernel, providing a localized interpretation of the input surface.
+
+
+**Normalization**:
+After computing the embeddings using multiple RBF kernels, layer normalization is applied across the channels, height, and width dimensions to ensure stability and consistency in the feature distributions:
 
 ```math
-\mathbf{x}_j = \text{erfinv}(2 \mathbf{u}_j - 1) \sqrt{2}
+H = \text{LayerNorm}(H_{\text{multi-channel}})
 ```
 
-   **Embedding Calculation**:
-     The embedding for each grid point $\mathbf{x}_j$ is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple RBF kernels. This results in a multi-channel grid of embedded values, each representing a localized interpretation of the input surface, shaped by the kernels' responses to the distances between grid points and data points. The final output is a multi-channel image-like representation where each channel corresponds to the embedded value at a specific grid location using a different RBF kernel.
-
-   **Normalization**:
-   After computing the embeddings using multiple RBF kernels, layer normalization is applied across the channels, height, and width dimensions to ensure stability and consistency in the feature distributions:
-
- ```math
- H = \text{LayerNorm}(H_{\text{multi-channel}})
- ```
-
-3. **2D Positional Encoding**:
+2. **2D Positional Encoding**:
    - Add positional encoding to the output of the 1x1 convolution. The positional encoding for each dimension $M$ and $T$ is defined as follows for a dimension size $d_{\text{embedding}}$:
 
 ```math
@@ -171,43 +165,6 @@ H_{\text{final}} = \text{LayerNorm}(H + \alpha \mathbf{PE}(M_j, T_j))
 ##### Output
 - **Encoded and Normalized Surface Embeddings $H_{\text{final}}$**: These embeddings are now ready to be fed into the encoder blocks of the transformer.
 
-#### Pre Encoder Blocks
-Refines the grid embeddings using a multi-branch convolutional architecture inspired by Inception-A from Inception v3. This block is designed to capture complex feature interactions at various scales, followed by normalization and a learnable scaled residual connection to integrate the original input features effectively.
-
-**Architectural Details**:
-- **Branches**: The block consists of four distinct branches that process the input embeddings in parallel:
-  1. **1x1 Convolution Branch**: Applies a straightforward 1x1 convolution to capture local features.
-  2. **1x1 followed by 3x3 Convolution Branch**: Begins with a 1x1 convolution to reduce dimensionality, followed by a 3x3 convolution to capture spatial correlations.
-  3. **1x1 followed by two 3x3 Convolutions (5x5 equivalent)**: Utilizes a 1x1 convolution for dimensionality reduction, followed by two successive 3x3 convolutions, effectively increasing the receptive field similar to a 5x5 convolution.
-  4. **3x3 Max Pooling followed by 1x1 Convolution**: Applies a 3x3 max pooling to reduce spatial size and enhance feature extraction, followed by a 1x1 convolution to transform the pooled features.
-- Each branch includes Batch Normalization and GELU activation functions to ensure stable and non-linear transformation of features.
-
-**Concatenation and Reduction**:
-- The outputs from all branches are concatenated along the channel dimension, combining diverse feature maps into a single tensor.
-- A 1x1 convolution is then applied to reduce the concatenated features back to the original number of channels, ensuring that the output tensor matches the input dimensions for residual addition.
-
-**Residual Connection and Normalization**:
-- A learnable scaling parameter is introduced in the residual connection, allowing the model to adjust the influence of the input embeddings on the final output dynamically.
-- After adding the scaled residual to the transformed features, a GELU activation function is applied to introduce non-linearity.
-- Layer Normalization is performed across the channels, height, and width of the output tensor to normalize the features before passing to subsequent blocks.
-
-**Mathematical Formulation**:
-- The transformations in each branch can be summarized as follows:
-  ```math
-  \mathbf{B}_1 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X}))) \\
-  \mathbf{B}_2 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{3\times3}(\text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X}))))))) \\
-  \mathbf{B}_3 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{3\times3}(\text{GELU}(\text{BatchNorm}(\text{Conv}_{3\times3}(\text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X})))))))))) \\
-  \mathbf{B}_4 = \text{GELU}(\text{BatchNorm}(\text{Conv}_{1\times1}(\text{MaxPool}_{3\times3}(\mathbf{X})))) \\
-  ```
-- Concatenation and reduction:
-  ```math
-  \mathbf{X}_{\text{concat}} = \text{Concat}(\mathbf{B}_1, \mathbf{B}_2, \mathbf{B}_3, \mathbf{B}_4) \\
-  \mathbf{X}_{\text{reduced}} = \text{BatchNorm}(\text{Conv}_{1\times1}(\mathbf{X}_{\text{concat}})) \\
-  ```
-- Residual connection with learnable scale:
-  ```math
-  \mathbf{X}_{\text{output}} = \text{LayerNorm}(\text{GELU}(\mathbf{X} + \alpha \cdot \mathbf{X}_{\text{reduced}}))
-  ```
 
 ### Surface Encoding
 
