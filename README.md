@@ -18,7 +18,7 @@ This project aims to create a transformer-based model for modeling implied volat
 #### Input Embedding
 
 - **Surface Embedding Block**: 
-  - Embeds surface values using Elliptical RBF Kernel.
+  - Embeds surface values using RBF Kernel.
   - Applies custom batch normalization for feature stability.
   - Projects to higher-dimensional space using 1x1 convolution and layer normalization.
   - Adds 2D positional encoding for embedding vectors.
