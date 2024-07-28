@@ -119,10 +119,12 @@ This preprocessing step ensures the dataset is not only tailored for effective l
 1. **Surface Continuous Kernel Embedding**:
 Compute the embedded surface values using multiple Elliptical RBF Kernels with different fixed bandwidths: The embedding for each grid point is calculated by summing the products of the kernel evaluations and the implied volatilities for each input data point across multiple elliptical RBF kernels, resulting in a multi-channel representation.
 
-**Fixed Bandwidth Calculation**: Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$. Mathematically, for each RBF kernel, where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ are the input data points, $\mathbf{x}_j$ represents points on a transformed grid, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel. Additionally, we introduce a learnable scale vector $\mathbf{s}$, initialized to 1, which serves as the diagonal scale matrix $A$ to calculate the distance $((\mathbf{y}_i - \mathbf{x}_j)^T A (\mathbf{y}_i - \mathbf{x}_j))$:
-     
+**Fixed Bandwidth Calculation**: Based on $d$ (d_embedding), we set a range for the Gaussian PDF integral: from $\frac{1}{d+1}$ to $\frac{d}{d+1}$. This gives us $d$ values for the integral solutions $i$. The bandwidth value of the RBF kernel is then set using the formula $\text{CDF}^{-1} \left( \frac{i + 1}{2} \right)$. Mathematically, for each RBF kernel, where $k_{k}$ is the k-th RBF kernel with a fixed bandwidth, $\mathbf{y}_i$ and $\mathbf{x}_j$ represent input surface points, and $f_i$ are the corresponding implied volatility values. Here, $\mathbf{d} = \mathbf{y}_i - \mathbf{x}_j$ is the vector of differences between input data points, and $\sigma_{k}$ is the fixed bandwidth for the k-th RBF kernel. Additionally, we introduce a learnable scale vector $\mathbf{s}$, initialized to 1, which serves as the diagonal scale matrix $A$ to calculate the distance $((\mathbf{y}_i - \mathbf{x}_j)^T A (\mathbf{y}_i - \mathbf{x}_j))$.
+
+For embedding calculation, the embedding at each point where a surface point is present is the average volatility value weighted by the kernel outputs. The same holds for the query points but their volatility values are not considered. This means we should divide the sum by the sum of the kernel outputs, ensuring that the sum is taken over the input surface points (excluding the query points), but each grid point can still be a query point:
+
 ```math
-h_{j}^{(k)} = \sum_{i=1}^{N} k_{k}(\mathbf{y}_i, \mathbf{x}_j) \cdot f_i
+h_{j}^{(k)} = \frac{\sum_{i=1}^{N} k_{k}(\mathbf{y}_i, \mathbf{x}_j) \cdot f_i}{\sum_{i=1}^{N} k_{k}(\mathbf{y}_i, \mathbf{x}_j)}
 ```
      
 ```math
@@ -133,15 +135,19 @@ k_{k}(\mathbf{x}, \mathbf{y}) = \exp\left(-\frac{(\mathbf{x} - \mathbf{y})^T \ma
 The embedding for each surface point is calculated by averaging the implied volatilities of all input surface points, weighted by their 2D distances using multiple elliptical RBF kernels with different bandwidths. This process is also applied to the masked points, except their IV values are masked out and not considered in the calculation. This results in a multi-channel representation where each channel corresponds to the embedded value computed using a different RBF kernel, providing a localized interpretation of the input surface.
 
 
+Here is the revised README section based on your new implementation details:
+
+---
+
 **Normalization**:
-After computing the embeddings using multiple RBF kernels, layer normalization is applied across the channels, height, and width dimensions to ensure stability and consistency in the feature distributions:
+After computing the embeddings using multiple Elliptical RBF kernels, layer normalization is applied across the embedding dimension to ensure stability and consistency in the feature distributions:
 
 ```math
 H = \text{LayerNorm}(H_{\text{multi-channel}})
 ```
 
 2. **2D Positional Encoding**:
-   - Add positional encoding to the output of the 1x1 convolution. The positional encoding for each dimension $M$ and $T$ is defined as follows for a dimension size $d_{\text{embedding}}$:
+   - Positional encoding is added to the output of the Elliptical RBF kernel embeddings. The positional encoding for each dimension $M$ and $T$ is defined as follows for a dimension size $d_{\text{embedding}}$:
 
 ```math
 PE(M_j, T_j, 4i) = \sin\left(\frac{M_j}{\sigma_{\text{scale}}^{4i/d_{\text{embedding}}}}\right)
@@ -157,14 +163,16 @@ PE(M_j, T_j, 4i+3) = \cos\left(\frac{T_j}{\sigma_{\text{scale}}^{4i/d_{\text{emb
 ```
    Where $i$ is an integer in the range $[0, d_{\text{embedding}}/4)$, and $\sigma_{\text{scale}}$ is a learnable parameter initially set to 10000 but adjustable during training.
 
-   - The full positional encoding $\mathbf{PE}(M_j, T_j)$ multiplied by a learnable factor of $\alpha$ initialized to 1, is added to the embedding vector $H$ from the 1x1 convolution for each grid point and finally sent through a layer normalization:
+   - The full positional encoding $\mathbf{PE}(M_j, T_j)$ is added to the embedding vector $H$ from the Elliptical RBF kernel embeddings with a constant factor $\sqrt{2}$ to account for the standard deviation of the sinusoidal functions:
 ```math
-H_{\text{final}} = \text{LayerNorm}(H + \alpha \mathbf{PE}(M_j, T_j))
+H_{\text{final}} = \text{LayerNorm}(H + \sqrt{2} \mathbf{PE}(M_j, T_j))
 ```
+
+3. **Mask Token**:
+   - A learnable mask token is added to the query points before layer norm to handle any masked values.
 
 ##### Output
 - **Encoded and Normalized Surface Embeddings $H_{\text{final}}$**: These embeddings are now ready to be fed into the encoder blocks of the transformer.
-
 
 ### Surface Encoding
 
