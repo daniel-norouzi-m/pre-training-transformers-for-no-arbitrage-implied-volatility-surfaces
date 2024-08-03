@@ -235,6 +235,42 @@ Each encoder block within the Surface Encoding module performs the following ope
 - The input to the module is a batch of tokenized, positional embedded surface data, alongside a batch of market features formatted as external features.
 - The output is a sequence of encoded tokens enriched with contextual information drawn from both the surface data and external market features, making it ready for downstream tasks such as prediction or further analysis.
 
+### Model Initialization
+
+The IvySPT model parameters are initialized using the following strategy:
+
+1. **Random Initialization**:
+   - All model parameters are randomly initialized from a normal distribution $N(0, 0.02)$.
+
+2. **Transformer Layer Rescaling**:
+   - For the $l$-th Transformer layer, the output matrices (i.e., the last linear projection within each sub-layer) of the self-attention module and the feed-forward network are rescaled by $\frac{1}{\sqrt{2l}}$. This ensures stable gradient flow and improves convergence.
+
+3. **Gate Bias Initialization**:
+   - The gate bias in the gated attention fusion mechanism is initialized to a high value (e.g., 10). This initialization biases the model to initially ignore external features, allowing it to focus on learning the primary self-attention relationships before integrating external information.
+
+### Visualizing Attention Maps
+
+To better understand the behavior and decision-making process of the IvySPT model, we can visualize the attention maps. Specifically, we focus on the self-attention and external attention mechanisms from the last Transformer layer. These visualizations help us see which parts of the input data the model is focusing on during its predictions.
+
+1. **Self-Attention Maps**:
+   - The self-attention mechanism captures dependencies between different positions within the surface embeddings.
+   - Visualizing these maps shows how the model correlates various points in the input surface to make its predictions.
+
+2. **External Attention Maps**:
+   - The external attention mechanism incorporates external market features into the encoding process.
+   - Visualizing these maps helps us understand how external market conditions influence the model's decisions.
+
+#### Steps to Visualize Attention Maps:
+
+1. **Extract Attention Weights**:
+   - From the last Transformer layer, extract the attention weights from the self-attention and external attention modules.
+
+2. **Generate Heatmaps**:
+   - For both self-attention and external attention, generate heatmaps to visualize the attention distributions. These heatmaps can be created using libraries such as Matplotlib or Seaborn.
+
+3. **Interpret the Heatmaps**:
+   - Analyze the heatmaps to identify patterns and insights into how the model is processing the input data and incorporating external features.
+
 
 ### Surface Arbitrage Free Loss
 
@@ -279,6 +315,28 @@ L_{but} = \left\| \max (0, -g) \right\|^2
    - These coefficients are configured to balance the influence of each component on the model's training process, ensuring both predictive accuracy and adherence to financial theory.
 
 This comprehensive approach to loss calculation helps train models that not only fit the data well but also respect crucial financial principles, contributing to more robust and dependable predictions in practical applications.
+
+### Ablation Study
+
+To assess the impact of different components of the IvySPT model, we conducted an ablation study by systematically removing or modifying specific elements. The following variants of the model were evaluated:
+
+1. **Removing the Continuous Kernel**:
+   - The elliptical RBF kernel-based continuous kernel embeddings were removed. This variant helps understand the contribution of the continuous kernel to the overall performance. 
+
+2. **Removing the Positional Embedding**:
+   - Positional embeddings were excluded from the model. This variant assesses the importance of positional information in representing the surface embeddings.
+
+3. **Removing the External Attention**:
+   - The external attention mechanism, which incorporates external market features, was removed. This variant evaluates the impact of external market features on the model's predictive accuracy.
+
+4. **Removing the Gated Fusion**:
+   - The gated attention fusion mechanism was replaced with a simple addition of the self-attention and external attention outputs. This variant highlights the effectiveness of the gating mechanism in combining different attention outputs.
+
+5. **Removing the No Arbitrage Conditions Soft Constraints**:
+   - The soft constraints ensuring no arbitrage conditions were removed from the loss function. This variant demonstrates the importance of enforcing financial constraints on the model's predictions.
+
+By comparing the performance of these ablated variants with the full IvySPT model, we can quantify the contribution of each component to the overall performance.
+
 
 ## Architecture Search
 
