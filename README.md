@@ -240,7 +240,7 @@ Each encoder block within the Surface Encoding module performs the following ope
 The IvySPT model parameters are initialized using the following strategy:
 
 1. **Random Initialization**:
-   - All model parameters are randomly initialized from a normal distribution $N(0, 0.02)$.
+   - All weights are randomly initialized from a normal distribution $N(0, 0.02)$ and biases are zero.
 
 2. **Transformer Layer Rescaling**:
    - For the $l$-th Transformer layer, the output matrices (i.e., the last linear projection within each sub-layer) of the self-attention module and the feed-forward network are rescaled by $\frac{1}{\sqrt{2l}}$. This ensures stable gradient flow and improves convergence.
@@ -259,17 +259,6 @@ To better understand the behavior and decision-making process of the IvySPT mode
 2. **External Attention Maps**:
    - The external attention mechanism incorporates external market features into the encoding process.
    - Visualizing these maps helps us understand how external market conditions influence the model's decisions.
-
-#### Steps to Visualize Attention Maps:
-
-1. **Extract Attention Weights**:
-   - From the last Transformer layer, extract the attention weights from the self-attention and external attention modules.
-
-2. **Generate Heatmaps**:
-   - For both self-attention and external attention, generate heatmaps to visualize the attention distributions. These heatmaps can be created using libraries such as Matplotlib or Seaborn.
-
-3. **Interpret the Heatmaps**:
-   - Analyze the heatmaps to identify patterns and insights into how the model is processing the input data and incorporating external features.
 
 
 ### Surface Arbitrage Free Loss
