@@ -4,57 +4,12 @@
 
 ### Introduction
 
-This project aims to create a transformer-based model for modeling implied volatility surfaces, uniquely incorporating key market features such as VIX, S&P returns, and treasury rates, and ensuring adherence to no-arbitrage constraints. The project also employs transfer learning to enhance model performance and adaptability. Pre-trained on high-liquidity options, this model exemplifies the power of transfer learning in financial modeling, allowing seamless fine-tuning for specific, less liquid options to deliver precise and reliable predictions.
+The IvySPT project introduces an innovative transformer-based model designed to accurately model implied volatility surfaces, integrating essential market features and adhering to rigorous financial constraints. This model strategically incorporates market dynamics through features such as VIX levels, S&P returns, and treasury rates, alongside the mean and standard deviation of surface implied volatility values, providing a comprehensive understanding of the market conditions influencing volatility estimates.
 
-## Model Pipeline
+Central to our approach is the utilization of transfer learning, which significantly enhances the model's performance and adaptability. Initially pre-trained on options with high liquidity, the model leverages learned patterns to facilitate rapid and efficient fine-tuning on specific, less liquid options. This dual-phase training approach—consisting of a robust pre-training phase followed by targeted fine-tuning—ensures that the model can provide precise and reliable predictions across a wide range of market scenarios.
 
-#### Dataset
+Additionally, the model's architecture is carefully designed to ensure compliance with no-arbitrage conditions, integrating these constraints as soft penalties within the loss function. This not only reinforces the financial validity of the model's predictions but also instills confidence in its use for practical trading and risk management applications. By embracing a sophisticated blend of machine learning techniques and deep financial insights, the IvySPT project sets a new standard for quantitative modeling in finance, aiming to deliver unmatched accuracy and insight into the complex dynamics of implied volatility surfaces.
 
-- **Dataset Creation**: Constructed from raw options trading data capturing key variables.
-- **Clustering and Masking**: 
-  - Clustering surfaces by datetime and symbol, segmenting data meaningfully.
-  - Masking random subsets of points within clusters to simulate missing data.
-
-#### Input Embedding
-
-- **Surface Embedding Block**: 
-  - Embeds surface values using RBF Kernel.
-  - Applies custom batch normalization for feature stability.
-  - Projects to higher-dimensional space using 1x1 convolution and layer normalization.
-  - Adds 2D positional encoding for embedding vectors.
-
-#### Surface Encoding
-
-- **Encoder Blocks**: 
-  - Utilizes self-attention mechanisms, external attention with market features, and feed-forward networks.
-  - Applies residual connections and layer normalization to refine surface embeddings.
-
-#### Query Embedding
-
-- **Point Embedding**: 
-  - Generates embeddings for query points using learnable and positional encodings.
-  - Refines embeddings through pre-decoder blocks with feed-forward networks and residual normalization.
-
-#### Surface Decoding
-
-- **Decoder Blocks**: 
-  - Processes query embeddings and encoded surface data using cross-attention mechanisms and feed-forward networks.
-  - Refines query embeddings for final prediction tasks.
-
-#### Output Mapping
-
-- **Fully Connected Layer**: Maps decoder output to target implied volatility values.
-
-#### Surface Arbitrage Free Loss
-
-- **Overview**: Ensures model predictions adhere to no-arbitrage conditions using soft constraints in the loss function.
-- **Loss Components**:
-  - **MSE Loss**: Measures the difference between model estimates and target volatilities.
-  - **Calendar Arbitrage Condition**: Ensures total implied variance does not decrease with time.
-  - **Butterfly Arbitrage Condition**: Prevents butterfly arbitrage in the volatility surface.
-  - **Total Loss Calculation**: Combines MSE loss with arbitrage constraints, weighted by predefined coefficients. 
-
-This approach ensures that the model predictions are not only accurate but also theoretically sound and robust against arbitrage opportunities.
 
 ### Dataset
 
@@ -82,7 +37,7 @@ To simulate real-world scenarios where all data points might not be available, d
 
 ##### Proportional Sampling
 
-Adjusting the proportion of masked data across training epochs allows the model to adapt to various levels of data availability, enhancing its robustness and predictive capabilities. This dynamic approach ensures that the model consistently encounters new patterns of missing data, promoting greater generalization and adaptability.
+Adjusting the proportion of masked data randomly across training iterations allows the model to adapt to various levels of data availability, enhancing its robustness and predictive capabilities. This dynamic approach ensures that the model consistently encounters new patterns of missing data, promoting greater generalization and adaptability.
 
 
 ### Surface Embedding Section
@@ -248,18 +203,6 @@ The IvySPT model parameters are initialized using the following strategy:
 3. **Gate Bias Initialization**:
    - The gate bias in the gated attention fusion mechanism is initialized to a high value (e.g., 10). This initialization biases the model to initially ignore external features, allowing it to focus on learning the primary self-attention relationships before integrating external information.
 
-### Visualizing Attention Maps
-
-To better understand the behavior and decision-making process of the IvySPT model, we can visualize the attention maps. Specifically, we focus on the self-attention and external attention mechanisms from the last Transformer layer. These visualizations help us see which parts of the input data the model is focusing on during its predictions.
-
-1. **Self-Attention Maps**:
-   - The self-attention mechanism captures dependencies between different positions within the surface embeddings.
-   - Visualizing these maps shows how the model correlates various points in the input surface to make its predictions.
-
-2. **External Attention Maps**:
-   - The external attention mechanism incorporates external market features into the encoding process.
-   - Visualizing these maps helps us understand how external market conditions influence the model's decisions.
-
 
 ### Surface Arbitrage Free Loss
 
@@ -299,11 +242,70 @@ L_{but} = \left\| \max (0, -g) \right\|^2
    - The total loss combines the MSE loss with the arbitrage constraints, weighted by predefined coefficients using $\lambda_{cal}$ and $\lambda_{but}$ for calendar and butterfly conditions, respectively.
    - Formulated as:
 ```math
-\text{Total Loss} = \text{MSE Loss} + \lambda_{cal} \cdot L_{cal} + \lambda_{but} \cdot L_{but}
+\text{Total Loss} = \lambda_{mse} \text{MSE Loss} + \lambda_{cal} \cdot L_{cal} + \lambda_{but} \cdot L_{but}
 ```
    - These coefficients are configured to balance the influence of each component on the model's training process, ensuring both predictive accuracy and adherence to financial theory.
 
 This comprehensive approach to loss calculation helps train models that not only fit the data well but also respect crucial financial principles, contributing to more robust and dependable predictions in practical applications.
+
+
+## Empirical Study
+
+### Data Splitting and Masking Strategy
+
+Due to the infeasibility of cross-validating the entire dataset, we adopt a partition-based approach for data splitting and masking. This method ensures robust training, validation, and testing phases while addressing potential data leakage issues.
+
+#### Data Splitting
+
+1. **Partitioning the Data**:
+   - The data time horizon is divided into $ N $ partitions.
+   - For each partition, the first 80% of the data span is designated as the training set, the next 10% as the validation set, and the final 10% as the test set.
+
+2. **Purging to Avoid Data Leakage**:
+   - When the training data trails the test data, the first day of the training set is removed to prevent data leakage from autocorrelation.
+   - This technique, known as purging, is recommended by Lopez de Prado to ensure the integrity of the training process.
+
+#### Dynamic Data Masking
+
+To simulate the task of recovering masked surface points, we employ a dynamic masking strategy with varying proportions of masked data:
+
+1. **Masking Proportions**:
+   - At each iteration, a random masking proportion is selected from the set \([0.1, 0.3, 0.5, 0.7]\).
+
+2. **Random Selection of Masked Points**:
+   - The masked points are randomly chosen based on the selected masking proportion, ensuring diverse and comprehensive training scenarios.
+
+By adopting this data splitting and masking strategy, we ensure that the model is trained and validated on robust, non-overlapping datasets while effectively simulating real-world conditions where data sparsity and recovery are critical challenges.
+
+
+### Baseline Comparison and Empirical Results
+
+The IvySPT model was rigorously tested against a variety of baselines to demonstrate its effectiveness and efficiency in estimating implied volatilities from market data. The comparative analysis involved two key phases: pre-training and fine-tuning, targeting different market conditions and data availability.
+
+#### Baseline Models:
+The baseline models included:
+1. **Dense Neural Network**: A fully connected neural network that estimates implied volatility values from given moneyness (M), time to maturity (T), and market features.
+2. **Random Forest**: A random forest regressor that predicts implied volatility from the moneyness and time to maturity of a surface.
+3. **Polynomial Regression**: A polynomial regression model for implied volatility estimation from surface data points.
+4. **Cubic Spline**: A spline-based method applied directly to interpolate and extrapolate surface points for volatility estimation.
+
+#### Testing Phases:
+1. **Pre-training Phase**: 
+   - The models were evaluated on options with abundant surface points to assess their ability to learn from dense data.
+   - Metrics: Mean Squared Error (MSE) and, where applicable, arbitrage-related losses (Butterfly and Calendar Arbitrage Losses) were calculated, alongside computational time and memory usage.
+
+2. **Fine-tuning Phase**:
+   - Both pre-trained IvySPT and fine-tuned models are evaluated on options characterized by sparser surface data.
+   - This phase further included stress-testing by evaluating the models on a subset of the test set corresponding to extreme market conditions to gauge robustness and reliability under stress.
+
+#### Comparative Analysis:
+The evaluation focused on:
+- **Performance Metrics**: MSE and arbitrage losses provided quantitative measures of prediction accuracy and adherence to financial no-arbitrage conditions.
+- **Stress Testing Results**: Specific insights into model performance during market extremes were highlighted to understand the resilience and stability of the models.
+- **Resource Utilization**: Reports on computation time and memory consumption offered a perspective on the scalability and practical deployment potential of each model.
+
+By detailed comparison against these benchmarks, the IvySPT model's unique advantages in handling sparse data and complex market dynamics, while ensuring computational efficiency, were underscored.
+
 
 ### Ablation Study
 
@@ -327,149 +329,233 @@ To assess the impact of different components of the IvySPT model, we conducted a
 By comparing the performance of these ablated variants with the full IvySPT model, we can quantify the contribution of each component to the overall performance.
 
 
-## Architecture Search
+### Hyperparameter Search
 
-This section explains how to find the optimal architecture without training by using rank scores of the NTK condition number and the Fisher-Rao norm at initialization.
+To optimize the performance of the IvySPT model, a comprehensive hyperparameter search was conducted. This search involved training and validating the model on subsets of the available data, ensuring efficient and effective identification of the best hyperparameters.
 
-#### NTK Condition Number
+#### Methodology:
+- **Training and Validation Subsets**:
+  - **Training Set**: 10% of the entire dataset was used for training during the hyperparameter search.
+  - **Validation Set**: 10% of the entire dataset was used for validation, allowing us to evaluate model performance on unseen data.
 
-The Neural Tangent Kernel (NTK) condition number measures the stability of the network during training. At initialization, we compute the NTK $\Theta$ and its condition number $\kappa(\Theta)$:
+#### Hyperparameters Considered:
+- **Number of Encoder Blocks**: The depth of the Transformer model.
+- **Embedding Dimensions**: The dimensionality of the embeddings used in the model.
+- **Learning Rate**: The step size used during gradient descent optimization.
+- **Batch Size**: The number of samples processed before the model is updated.
+- **Dropout Rates**: The rates at which neurons are randomly dropped during training to prevent overfitting.
 
-```math
-\Theta(x, x') = \nabla_\theta f(x; \theta)^\top \nabla_\theta f(x'; \theta)
-```
+#### Evaluation Metrics:
+- **Mean Squared Error (MSE)**: Measures the average squared difference between estimated and actual values.
+- **Butterfly Arbitrage Loss**: Ensures the model's predictions adhere to no-arbitrage conditions related to volatility smiles.
+- **Calendar Arbitrage Loss**: Ensures the model's predictions adhere to no-arbitrage conditions related to term structures.
 
-The condition number is given by the ratio of the largest to the smallest eigenvalue of the NTK:
+#### Search Strategy:
+- A grid search or random search approach was employed to explore combinations of hyperparameters.
+- The **average rankings** of the models were used as a robust metric for selecting the best hyperparameters. This involved averaging the rankings of the models across all evaluation metrics, ensuring a balanced consideration of performance aspects.
 
-```math
-\kappa(\Theta) = \frac{\lambda_{\max}(\Theta)}{\lambda_{\min}(\Theta)}
-```
+#### Reporting:
+- **Loss Plots**: For each combination of the number of encoder blocks and embedding dimensions, the three losses (MSE, Butterfly Arbitrage Loss, and Calendar Arbitrage Loss) were plotted. These visualizations provided insights into how different configurations impacted model performance.
+- The selected hyperparameters were those that consistently performed well across all metrics, ensuring a robust and generalizable model.
 
-#### Fisher-Rao Norm
+By systematically exploring the hyperparameter space and evaluating the models on subsets of the data, the IvySPT model's performance was fine-tuned, resulting in an optimized configuration ready for deployment and further analysis.
 
-The Fisher-Rao norm measures the expressivity of the model by quantifying the sensitivity of the output distribution with respect to parameter changes:
 
-```math
-F(\theta) = \mathbb{E} \left[ \left( \frac{\partial \log p(X; \theta)}{\partial \theta} \right) \left( \frac{\partial \log p(X; \theta)}{\partial \theta} \right)^\top \right]
-```
+### Sensitivity Analysis to Market Features
 
-The Fisher-Rao norm is calculated as:
+#### Overview:
+To understand how the IvySPT model's predictions are influenced by market features, we conducted a sensitivity analysis using neural network gradients on the validation set. This analysis helps in interpreting the model's responsiveness to changes in market conditions, providing insights into the robustness and reliability of the predictions.
 
-```math
-\| \theta \|_{\text{FR}} = \sqrt{\theta^\top F(\theta) \theta}
-```
+#### Methodology:
+- **Gradient Computation**:
+  - For each estimated implied volatility (IV) value, the gradient with respect to each market feature (e.g., market return, market volatility, treasury rate) is calculated.
+  - These gradients indicate the direction and magnitude of change in the IV estimates in response to changes in the market features.
 
-#### Ranking and Selection
+#### Interpretation:
+- **Magnitude of Gradients**:
+  - Large gradient values indicate that the model's predictions are highly sensitive to changes in the corresponding market feature.
+  - Small gradient values suggest that the model's predictions are relatively stable with respect to changes in that market feature.
 
-Architectures are ranked based on their NTK condition number and Fisher-Rao norm. The optimal architecture minimizes the NTK condition number and maximizes the Fisher-Rao norm:
+- **Positive vs. Negative Gradients**:
+  - Positive gradients imply that an increase in the market feature leads to an increase in the estimated IV.
+  - Negative gradients suggest that an increase in the market feature results in a decrease in the estimated IV.
 
-```math
-R_C(i) = \alpha R_{\kappa}(i) + (1 - \alpha) R_{\text{FR}}(i)
-```
+#### Reporting:
+- **Aggregate Statistics**:
+  - Report the mean and standard deviation of the gradients for each market feature across the entire test set. This provides a summary of the overall sensitivity.
+  - Present histograms or box plots to visualize the distribution of gradients for each market feature, offering a detailed view of the variability in sensitivity.
 
-where $R_{\kappa}(i)$ and $R_{\text{FR}}(i)$ are the rankings based on the NTK condition number and Fisher-Rao norm, respectively, and $\alpha$ is a weight balancing the two criteria.
+- **Implications**:
+  - Discuss the practical implications of the sensitivity analysis, such as the reliability of predictions during periods of market turbulence.
+  - Explain how understanding sensitivity can guide risk management and decision-making processes for users of the model.
 
-## Evaluating the Trained Model
+By thoroughly analyzing and reporting the sensitivity of the IvySPT model to market features, we can provide a transparent and comprehensive evaluation of its performance, addressing potential concerns regarding robustness and reliability in various market conditions.
 
-This section describes the evaluation of the trained model for robustness, sensitivity, trainability, and expressivity.
 
-#### Gradients and Hessians
+### Flat Local Minima Analysis
 
-The gradients and Hessians of the loss function with respect to model parameters and input features (initial embedded surface grid and external features) are computed.
+#### Overview:
+To demonstrate that the IvySPT model is in a flat local minimum after training, we analyze the gradients and Hessians of the loss landscape using the validation set. A flat local minimum indicates that the model is in a region of the parameter space where the loss surface is relatively flat, suggesting robustness and generalizability of the model.
 
-- **Gradient Norm**:
-  ```math
-  \|\nabla_{\theta} L\|_2 = \sqrt{\sum_{i=1}^p \left( \frac{\partial L}{\partial \theta_i} \right)^2}
-  ```
+#### Methodology:
+- **Gradient Analysis**:
+  - Compute the gradients of the loss with respect to the model parameters.
+  - A flat local minimum is indicated by small gradient magnitudes, suggesting that small perturbations in the parameter space do not significantly change the loss.
 
-- **Hessian Condition Number**:
+- **Hessian Analysis**:
+  - Compute the Hessian matrix, which contains second-order partial derivatives of the loss with respect to the model parameters.
+  - The eigenvalues of the Hessian provide information about the curvature of the loss surface. A flat local minimum is characterized by small eigenvalues, indicating that the loss landscape is flat in various directions.
+
   ```math
   H = \left[ \frac{\partial^2 L}{\partial \theta_i \partial \theta_j} \right]
   ```
-  ```math
-  \kappa(H) = \frac{\lambda_{\max}(H)}{\lambda_{\min}(H)}
-  ```
 
-#### NTK Condition Number and Trace
+#### Reporting:
+- **Gradient Magnitude**:
+  - Report the mean and standard deviation of the gradient magnitudes across all model parameters.
+  - Present histograms or box plots to visualize the distribution of gradient magnitudes, providing a detailed view of the variability.
 
-For the final model, compute the NTK and its condition number and trace:
+- **Hessian Eigenvalues**:
+  - Report the eigenvalues of the Hessian matrix, focusing on their magnitude.
+  - Present a histogram or a plot of the eigenvalues to illustrate the curvature of the loss landscape.
+  - Calculate and report the ratio of small to large eigenvalues to quantify the flatness of the local minimum.
+
+- **Implications**:
+  - Discuss the practical implications of finding a flat local minimum, such as improved model robustness and generalizability.
+  - Explain how the flatness of the local minimum can lead to better performance on unseen data, as the model is less sensitive to small perturbations in the parameter space.
+
+By conducting a thorough analysis of the gradients and Hessians, we can provide strong evidence that the IvySPT model is in a flat local minimum, reinforcing its robustness and reliability.
+
+
+### Demonstrating Model Convergence
+
+To demonstrate the convergence of the IvySPT model, we monitor and visualize various metrics throughout the training process. This includes tracking the training and validation losses for each of the three losses in our problem, as well as analyzing the distribution of the Neural Tangent Kernel (NTK) eigenvalues at initialization.
+
+#### Loss Tracking During Training
+
+We track and plot the following losses during the training process to assess the convergence of the model:
+1. **Mean Squared Error (MSE) Loss**:
+   - This loss measures the difference between the predicted and actual implied volatility values.
+2. **Calendar Arbitrage Loss**:
+   - This loss ensures that the model's predictions do not exhibit calendar arbitrage violations.
+3. **Butterfly Arbitrage Loss**:
+   - This loss ensures that the model's predictions do not exhibit butterfly arbitrage violations.
+
+For each loss, we plot both the training and validation losses against the number of epochs. This helps in understanding how well the model is learning and generalizing to unseen data.
+
+#### Neural Tangent Kernel (NTK) Eigenvalues Distribution
+
+At initialization, we analyze the distribution of the NTK eigenvalues using 10% of the entire training set. The NTK provides insights into the training dynamics and convergence properties of the model. By plotting the distribution of the NTK eigenvalues, we can assess the initial conditions of the model and ensure they are conducive to effective training.
 
 ```math
 \Theta(x, x') = \nabla_\theta f(x; \theta)^\top \nabla_\theta f(x'; \theta)
 ```
 
-- **Condition Number**:
-  ```math
-  \kappa(\Theta) = \frac{\lambda_{\max}(\Theta)}{\lambda_{\min}(\Theta)}
-  ```
+#### Visualization
 
-- **Trace**:
-  ```math
-  \text{Tr}(\Theta) = \sum_{i=1}^{n} \lambda_i(\Theta)
-  ```
+- **Training and Validation Loss Curves**:
+  - Plot the training and validation losses for MSE, calendar arbitrage, and butterfly arbitrage losses against the number of epochs.
+  - These plots help in understanding the convergence behavior of the model and identifying any potential overfitting.
 
-#### Fisher-Rao Norm
+- **NTK Eigenvalues Distribution**:
+  - Plot the distribution of the NTK eigenvalues at initialization.
+  - This plot provides insights into the model's training dynamics and helps in assessing the initial conditions of the model.
 
-Compute the Fisher-Rao norm for the final model:
-
-```math
-\| \theta \|_{\text{FR}} = \sqrt{\theta^\top F(\theta) \theta}
-```
-
-## Component Analysis
-
-Analyze each component of the trained model using gradients, Hessians, NTK, and Fisher-Rao norm.
-
-#### Gradients and Hessians
-
-- **Gradient Norm**:
-  ```math
-  \|\nabla_{\theta^l} L\|_2 = \sqrt{\sum_{i=1}^p \left( \frac{\partial L}{\partial \theta^l_i} \right)^2}
-  ```
-
-- **Hessian Condition Number**:
-  ```math
-  H^l = \left[ \frac{\partial^2 L}{\partial \theta^l_i \partial \theta^l_j} \right]
-  ```
-  ```math
-  \kappa(H^l) = \frac{\lambda_{\max}(H^l)}{\lambda_{\min}(H^l)}
-  ```
-
-#### NTK Condition Number and Trace
-
-For each component, compute the NTK and its condition number and trace:
-
-```math
-\Theta^l(x, x') = \nabla_{\theta^l} f(x; \theta^l)^\top \nabla_{\theta^l} f(x'; \theta^l)
-```
-
-- **Condition Number**:
-  ```math
-  \kappa(\Theta^l) = \frac{\lambda_{\max}(\Theta^l)}{\lambda_{\min}(\Theta^l)}
-  ```
-
-- **Trace**:
-  ```math
-  \text{Tr}(\Theta^l) = \sum_{i=1}^{n} \lambda_i(\Theta^l)
-  ```
-
-#### Fisher-Rao Norm
-
-Compute the Fisher-Rao norm for each component:
+By visualizing these metrics, we can effectively demonstrate the convergence of the IvySPT model and ensure that it is learning appropriately from the data.
 
 
-```math
-\| \theta^l \|_{\text{FR}} = \sqrt{{\theta^l}^\top F^l(\theta^l) \theta^l} 
-```
+### Dynamics of Each Loss Contribution During Training
 
-## Out of Sample and Stress Testing
+To understand the contribution of each loss to the overall training process, we employ the GradNorm method. GradNorm is an adaptive algorithm that dynamically adjusts the weights of each task's loss function to balance the training rates of different tasks. This ensures that no single task dominates the training process, leading to a more balanced and efficient training regime.
 
-Perform out-of-sample and stress testing by creating sequential blocks of data used as train and test sets, applying De Prado's embargo method to prevent leakage from autocorrelation. Report the out-of-sample results (MSE, MAE, calendar arbitrage, butterfly arbitrage) for the entire test set and for test blocks considered as stress times.
+#### GradNorm Method
+
+GradNorm works by normalizing the gradient magnitudes across tasks and adjusting the loss weights to balance the training rates. The algorithm aims to achieve the following goals:
+
+1. **Common Scale for Gradient Magnitudes**:
+   - Establish a common scale for gradient magnitudes across tasks.
+   - This is achieved by using the average gradient norm as a baseline.
+
+2. **Balancing Training Rates**:
+   - Adjust gradient norms so that different tasks train at similar rates.
+   - This is done by dynamically adjusting the loss weights based on the relative training rates of the tasks.
+
+The GradNorm algorithm can be summarized by the following key steps:
+
+1. **Define Gradient Norms and Training Rates**:
+   - $ G_W^{(i)}(t) = \| \nabla_W [w_i(t) L_i(t)] \|_2 $: L2 norm of the gradient of the weighted single-task loss.
+   - $ G_W(t) = \mathbb{E}_{\text{task}} [G_W^{(i)}(t)] $: Average gradient norm across all tasks.
+   - $ \tilde{L}_i(t) = \frac{L_i(t)}{L_i(0)} $: Loss ratio for task $i$, representing the inverse training rate.
+   - $ r_i(t) = \frac{\tilde{L}_i(t)}{\mathbb{E}_{\text{task}} [\tilde{L}_i(t)]} $: Relative inverse training rate.
+
+2. **Adjust Gradient Norms**:
+   - Target gradient norm for each task $i$ is adjusted as:
+   $$
+   G_W^{(i)}(t) \rightarrow G_W(t) \times [r_i(t)]^\alpha
+   $$
+   where $\alpha$ is a hyperparameter that sets the strength of the balancing force.
+
+3. **Compute Gradient Loss**:
+   - The gradient loss $ L_{\text{grad}} $ is defined as:
+   $$
+   L_{\text{grad}}(t; w_i(t)) = \sum_i \left| G_W^{(i)}(t) - G_W(t) \times [r_i(t)]^\alpha \right|_1
+   $$
+   This loss penalizes the network when gradient magnitudes are too large or too small compared to the desired target.
+
+4. **Update Loss Weights**:
+   - The loss weights $ w_i(t) $ are updated using the gradient of $ L_{\text{grad}} $ to balance the training rates.
+
+By applying GradNorm, we ensure that the training process is balanced and that each task contributes effectively to the overall learning.
+
+#### Visualization of Loss Coefficients
+
+To visualize the dynamics of each loss contribution during training, we plot the coefficients of each loss function at each iteration. These plots help us understand how the model adjusts the importance of each task's loss over time.
+
+- **Loss Coefficients Plot**:
+  - The plot shows the evolution of the coefficients for the mean squared error (MSE) loss, calendar arbitrage loss, and butterfly arbitrage loss during training.
+  - This visualization helps in understanding how the GradNorm algorithm dynamically adjusts the loss weights to achieve balanced training.
+
+By analyzing these plots, we can gain insights into the training dynamics and the effectiveness of the GradNorm method in balancing the loss contributions.
 
 
-## Summary
+### Loss Decomposition Analysis
 
-This model integrates advanced transformer techniques with market-conditioned mechanisms to enhance modelling accuracy and robustness for implied volatility surfaces. The structured approach leverages transfer learning, making it adaptable to various market conditions and specific option datasets. This project showcases a novel application of transformers in financial modeling, offering significant contributions to the field.
+To gain a deeper understanding of the model's performance, we decompose the losses based on their corresponding year and mask proportion. This decomposition allows us to analyze how the losses vary across different time periods and masking proportions, providing insights into the model's behavior under different conditions.
+
+#### Loss Decomposition by Year
+
+By decomposing the losses based on the year, we can observe how the model's performance evolves over time. This is particularly useful for identifying any temporal patterns or trends in the losses, which may indicate the model's sensitivity to changes in market conditions or other temporal factors.
+
+#### Loss Decomposition by Mask Proportion
+
+Decomposing the losses based on the mask proportion helps us understand how the model performs under different levels of data sparsity. By analyzing the losses for different masking proportions, we can evaluate the model's robustness to missing data and its ability to generalize from incomplete surfaces.
+
+#### Visualization of Loss Decomposition
+
+To visualize the loss decomposition, we create plots that show the distribution of each loss type (MSE, calendar arbitrage, butterfly arbitrage) based on the year and mask proportion. These plots provide a detailed view of the model's performance across different scenarios.
+
+- **Loss Decomposition by Year**:
+  - Plot the MSE, calendar arbitrage loss, and butterfly arbitrage loss for each year.
+  - This helps identify any temporal patterns or trends in the losses.
+
+- **Loss Decomposition by Mask Proportion**:
+  - Plot the MSE, calendar arbitrage loss, and butterfly arbitrage loss for each mask proportion.
+  - This helps evaluate the model's robustness to missing data and its ability to generalize from incomplete surfaces.
+
+By analyzing these plots, we can gain valuable insights into the model's performance across different time periods and data sparsity levels, helping us understand the strengths and weaknesses of the model under various conditions.
+
+
+### Visualizing Attention Maps
+
+To better understand the behavior and decision-making process of the IvySPT model, we can visualize the attention maps. Specifically, we focus on the self-attention and external attention mechanisms from the last Transformer layer. These visualizations help us see which parts of the input data the model is focusing on during its predictions.
+
+1. **Self-Attention Maps**:
+   - The self-attention mechanism captures dependencies between different positions within the surface embeddings.
+   - Visualizing these maps shows how the model correlates various points in the input surface to make its predictions.
+
+2. **External Attention Maps**:
+   - The external attention mechanism incorporates external market features into the encoding process.
+   - Visualizing these maps helps us understand how external market conditions influence the model's decisions.
 
 ---
 ---
