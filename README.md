@@ -2,7 +2,10 @@
 ---
 # A Surface is Worth Hundreds of Options: Pre-Training Transformers for No-Arbitrage Implied Volatility Surfaces
 
-### Introduction
+## Abstract
+Accurate modeling of implied volatility surfaces is crucial for options pricing and risk management. This paper introduces IvySPT, a transformer-based architecture designed to integrate key market features—such as VIX levels, SP 500 returns, and treasury rates—into estimating these surfaces while providing interpretable insights into the complex relationships between market conditions and volatility estimates. Our approach leverages dynamic data masking and a dual-phase training strategy: the model is pre-trained on high liquidity options and subsequently fine-tuned to adapt to sparse volatility surfaces. The model's robustness is further enhanced by a dynamic masking strategy that simulates real-world scenarios, improving generalization and inference of missing information under varying data availability conditions. To ensure the financial soundness of the estimations, no-arbitrage conditions are embedded as soft constraints within the loss function. IvySPT not only sets new standards in the estimation accuracy of financial models but also provides a comprehensive framework for understanding the intricate dynamics of market conditions on volatility estimates.
+
+## Introduction
 
 The IvySPT project introduces an innovative transformer-based model designed to accurately model implied volatility surfaces, integrating essential market features and adhering to rigorous financial constraints. This model strategically incorporates market dynamics through features such as VIX levels, S&P returns, and treasury rates, alongside the mean and standard deviation of surface implied volatility values, providing a comprehensive understanding of the market conditions influencing volatility estimates.
 
