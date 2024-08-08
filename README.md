@@ -59,7 +59,7 @@ To ensure that the model inputs are normalized and stable for training:
      ```
 
 2. **Market Features Normalization**:
-   - Market features such as return, volatility, and treasury rates are also normalized using batch normalization, catering to their dynamic ranges and distributions:
+   - Market features (S&P returns, VIX, treasury rates, mean of surface IVs, and std. of surface IVs) are also normalized using batch normalization, catering to their dynamic ranges and distributions:
      ```math
      \text{norm\_market\_feature} = \text{BatchNorm1d}(\text{market feature})
      ```
@@ -146,13 +146,22 @@ Each encoder block within the Surface Encoding module performs the following ope
    \text{SA}(X) = \text{softmax}\left(\frac{XQ (XK)^T}{\sqrt{d_k}}\right) XV
    ```
    - Where $X$ is the input sequence, $Q$, $K$, and $V$ are the query, key, and value projections of $X$, respectively.
+     
+   - Applies a residual connection followed by layer normalization to the gated embedding:
+   ```math
+   \text{SA}(X) = \text{LayerNorm}(X + \text{SA}(X))
+   ```
 
 2. **Cross-Attention**:
-   - Incorporates external market features into the encoding process:
+   - Incorporates external market features (S&P returns, VIX, treasury rates, mean of surface IVs, std. of surface IVs) into the encoding process:
    ```math
    \text{EA}(X, M) = \text{softmax}\left(\frac{XQ (MK)^T}{\sqrt{d_k}}\right) MV
    ```
    - $M$ denotes the external market features, treated as additional key and value inputs to the attention mechanism.
+   - Applies a residual connection followed by layer normalization to the gated embedding:
+   ```math
+   \text{EA}(X, M) = \text{LayerNorm}(X + \text{EA}(X, M))
+   ```
 
 3. **Gated Attention Fusion**:
    - Combines the outputs of self-attention and cross-attention using a gating mechanism.
@@ -166,20 +175,17 @@ Each encoder block within the Surface Encoding module performs the following ope
    \text{Gated Embedding}(X) = \text{Gate}(X) \cdot \text{SA}(X) + (1 - \text{Gate}(X)) \cdot \text{EA}(X, M)
    ```
 
-4. **Residual Connection and Layer Normalization**:
    - Applies a residual connection followed by layer normalization to the gated embedding:
    ```math
    X = \text{LayerNorm}(X + \text{Gated Embedding}(X))
    ```
 
-5. **Feed-Forward Network**:
+4. **Feed-Forward Network**:
    - A two-layer network with GELU activation and dropout applied between layers:
    ```math
    \text{FFN}(X) = W_2 \cdot \text{GELU}(W_1X + b_1) + b_2
    ```
-
-6. **Final Residual Connection and Layer Normalization**:
-   - Similar to step 4, integrates the feed-forward network output:
+   - Integrates the feed-forward network output:
    ```math
    X = \text{LayerNorm}(X + \text{FFN}(X))
    ```
