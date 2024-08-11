@@ -1,5 +1,4 @@
 import torch
-from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
@@ -11,7 +10,7 @@ import numpy as np
 def implied_volatility_surfaces(
     options_market_data,
     toy_sample=False,
-    max_points=100,
+    max_points=30,
     max_surfaces=10,
     random_state=0,
 ):
@@ -51,6 +50,70 @@ def implied_volatility_surfaces(
     return surfaces
 
 
+def split_surfaces(
+    data, 
+    n_partitions=6,
+    toy_sample=False,
+    max_points=30,
+    max_surfaces=10,
+    random_state=0,
+):
+    # Extract unique sorted timestamps
+    unique_timestamps = np.sort(data.index.get_level_values('Datetime').unique())
+    
+    # Split timestamps into partitions
+    partitions = np.array_split(unique_timestamps, n_partitions)
+    
+    # Initialize lists to hold the final timestamps for each dataset
+    train_times = []
+    validation_times = []
+    test_times = []
+
+    for partition in partitions:
+        # Remove the first day of the partition to avoid leakage
+        if len(partition) > 1:
+            partition = partition[1:]
+        
+        # Determine the number of timestamps for training, validation, and test sets
+        partition_len = len(partition)
+        train_len = int(0.8 * partition_len)
+        valid_len = int(0.1 * partition_len)
+        
+        # Assign timestamps to train, validation, and test sets
+        train_times.extend(partition[:train_len])
+        validation_times.extend(partition[train_len:train_len + valid_len])
+        test_times.extend(partition[train_len + valid_len:])
+    
+    # Now, use the timestamps to filter the data for each set
+    train_set = data.query('Datetime in @train_times')
+    validation_set = data.query('Datetime in @validation_times')
+    test_set = data.query('Datetime in @test_times')
+
+    train_surface = implied_volatility_surfaces(
+        train_set,
+        toy_sample,
+        max_points,
+        max_surfaces,
+        random_state,
+    )
+    validation_surface = implied_volatility_surfaces(
+        validation_set,
+        toy_sample,
+        max_points,
+        max_surfaces,
+        random_state,
+    )
+    test_surface = implied_volatility_surfaces(
+        test_set,
+        toy_sample,
+        max_points,
+        max_surfaces,
+        random_state,
+    )
+    
+    return train_surface, validation_surface, test_surface
+
+
 class IVSurfaceDataset(Dataset):
     def __init__(
         self, 
@@ -88,13 +151,14 @@ class IVSurfaceDataset(Dataset):
             ('kmeans', KMeans(n_clusters=n_clusters, random_state=self.random_state, n_init='auto'))
         ])
         labels = pipeline.fit_predict(points_coordinates)
-        masked_indices = np.array([], dtype=int)
+        masked_indices = []
 
         for cluster in range(n_clusters):
             cluster_indices = np.where(labels == cluster)[0]
             num_to_mask = int(np.ceil(len(cluster_indices) * proportion))
-            masked_indices = np.append(masked_indices, [self.rng.choice(cluster_indices, size=num_to_mask, replace=False)])
+            masked_indices.extend(self.rng.choice(cluster_indices, size=num_to_mask, replace=False))
         
+        masked_indices = np.array(masked_indices)
         unmasked_indices = np.setdiff1d(range(len(labels)), masked_indices)
 
         # Calculate Total Variance mean and std for unmasked points

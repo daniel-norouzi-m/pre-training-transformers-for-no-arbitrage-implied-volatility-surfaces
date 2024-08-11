@@ -1,6 +1,6 @@
+import pandas as pd
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 class SurfaceArbitrageFreeLoss(nn.Module):
     def __init__(self):
@@ -11,9 +11,8 @@ class SurfaceArbitrageFreeLoss(nn.Module):
         tv_estimates_batch, 
         batch,
         testing_mode=False,
-        epsilon=1e-5  # Small value to prevent division by zero
     ):
-        mspe_loss_sum = 0.0
+        mse_loss_sum = 0.0
         calendar_arbitrage_loss_sum = 0.0
         butterfly_arbitrage_loss_sum = 0.0
         total_elements = 0
@@ -28,10 +27,9 @@ class SurfaceArbitrageFreeLoss(nn.Module):
             sequence_length = total_implied_variance.size(0)
             total_elements += sequence_length
 
-            # Calculate mean squared percentage error between model estimates and target variances
-            percentage_error = (total_implied_variance - target_variance) / (target_variance + epsilon)
-            mspe_loss = torch.sum(percentage_error ** 2)
-            mspe_loss_sum += mspe_loss
+            # Calculate mean squared error between model estimates and target variances
+            mse_loss = torch.sum((total_implied_variance - target_variance) ** 2)
+            mse_loss_sum += mse_loss
 
             unit_vectors = torch.eye(sequence_length, device=total_implied_variance.device)
 
@@ -77,19 +75,19 @@ class SurfaceArbitrageFreeLoss(nn.Module):
             butterfly_arbitrage_loss_sum += butterfly_arbitrage_loss.sum()
             if testing_mode:
                 record = {
-                    'MSPE Loss': mspe_loss.mean().item(),
+                    'MSE Loss': mse_loss.mean().item(),
                     'Calendar Arbitrage Loss': calendar_arbitrage_loss.mean().item(),
                     'Butterfly Arbitrage Loss': butterfly_arbitrage_loss.mean().item()
                 }
                 loss_records.append(record)
 
         # Calculate mean losses
-        mspe_loss = mspe_loss_sum / total_elements
+        mse_loss = mse_loss_sum / total_elements
         calendar_arbitrage_loss = calendar_arbitrage_loss_sum / total_elements
         butterfly_arbitrage_loss = butterfly_arbitrage_loss_sum / total_elements
 
         # Stack losses into a single tensor
-        total_losses = torch.stack([mspe_loss, calendar_arbitrage_loss, butterfly_arbitrage_loss])
+        total_losses = torch.stack([mse_loss, calendar_arbitrage_loss, butterfly_arbitrage_loss])
 
         if testing_mode:
             loss_records = pd.DataFrame(loss_records)

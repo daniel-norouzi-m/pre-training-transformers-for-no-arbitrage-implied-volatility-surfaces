@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.utils.data._utils.collate import default_collate
+import numpy as np
 
 class SurfaceBatchNorm(nn.Module):
     def __init__(
@@ -75,24 +75,19 @@ class EllipticalRBFKernel(nn.Module):
         self, 
         input_dim, 
         bandwidth, 
-        remove_kernel=False
+        remove_kernel=False,
+        epsilon=1e-10
     ):
         super(EllipticalRBFKernel, self).__init__()
-        self.bandwidth = bandwidth
+        if remove_kernel:
+            self.bandwidth = epsilon
+        else:
+            self.bandwidth = bandwidth
         # Initialize the log of the scale vector to zero, which corresponds to scale factors of one
         self.log_scale = nn.Parameter(torch.zeros(input_dim))
-        self.remove_kernel = remove_kernel
+        self.epsilon = epsilon
 
     def forward(self, distances):
-        if self.remove_kernel:
-            # Create a mask for the condition check
-            all_zeros = torch.all(distances==0.0, dim=-1)
-            result = torch.where(
-                all_zeros, 
-                torch.full(distances.shape[:-1], 1.0, device=distances.device),
-                torch.full(distances.shape[:-1], 1e-10, device=distances.device)
-            )
-            return result
         # Convert log scale to actual scale values
         scale = torch.exp(self.log_scale)
         
@@ -101,10 +96,10 @@ class EllipticalRBFKernel(nn.Module):
 
         # Normalize by the trace of the scale matrix
         trace_scale_matrix = torch.sum(scale)
-        normalized_distances = torch.sum(scaled_distances, dim=-1) / trace_scale_matrix
+        normalized_distances = torch.sum(scaled_distances, dim=-1) / trace_scale_matrix 
 
         # Compute the RBF kernel output using the normalized distances
-        kernel_values = torch.exp(-normalized_distances / (2 * self.bandwidth ** 2))
+        kernel_values = torch.exp(-normalized_distances / (2 * self.bandwidth ** 2)) + self.epsilon
 
         return kernel_values
 
@@ -221,11 +216,6 @@ class SurfaceContinuousKernelPositionalEmbedding(nn.Module):
                 positional_embedding[:, 4 * i + 3] = torch.cos(coords[:, 1] / div_factor)
 
         return positional_embedding
-
-
-import torch
-import torch.nn as nn
-import numpy as np
 
 class SurfaceEmbedding(nn.Module):
     def __init__(

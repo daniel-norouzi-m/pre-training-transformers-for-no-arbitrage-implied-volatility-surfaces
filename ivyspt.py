@@ -1,5 +1,7 @@
-import torch
 import torch.nn as nn
+
+from surface_embedding import SurfaceEmbedding
+from surface_encoder import SurfaceEncoder
 
 class IvySPT(nn.Module):
     def __init__(

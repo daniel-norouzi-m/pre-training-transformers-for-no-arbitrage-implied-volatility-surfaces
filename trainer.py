@@ -1,7 +1,14 @@
+import gc
+import numpy as np
+import pandas as pd
 import torch
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR, SequentialLR
 from torch.nn.utils import clip_grad_norm_
+from torch.utils.tensorboard import SummaryWriter
+
+from adaptive_loss_coefficients import AdaptiveLossCoefficients
+from surface_arbitrage_free_loss import SurfaceArbitrageFreeLoss
 
 def send_batch_to_device(batched_data, device):
     def move_to_device(data, device):
@@ -73,7 +80,52 @@ class Trainer:
             milestones=[self.warmup_epochs]
         )
 
-    def train(self):
+    def _layer_wise_learning_rate_decay(
+        self, 
+        layer_wise_decay, 
+        base_lr
+    ):
+        params = []
+
+        # Final layer (depth 0)
+        params.append({
+            'params': self.model.final_layer.parameters(),
+            'lr': base_lr
+        })
+
+        # Surface Encoder layers (depth from 1 to num_encoder_blocks)
+        if layer_wise_decay is not None:
+            for i, encoder in enumerate(self.model.surface_encoder.encoders):
+                lr = base_lr * (layer_wise_decay ** (i + 1))
+                params.append({
+                    'params': encoder.parameters(),
+                    'lr': lr
+                })
+
+            # Surface Embedding layers (highest depth)
+            params.append({
+                'params': self.model.surface_embedding.parameters(),
+                'lr': base_lr * (layer_wise_decay ** (len(self.model.surface_encoder.encoders) + 1))
+            })
+        else:
+            # No decay: All layers use the base learning rate
+            params.extend([
+                {'params': self.model.surface_encoder.parameters(), 'lr': base_lr},
+                {'params': self.model.surface_embedding.parameters(), 'lr': base_lr},
+            ])
+
+        return params    
+
+    def train(
+        self, 
+        experiment_name=None
+    ):
+        # Initialize TensorBoard writer if an experiment name is provided
+        if experiment_name:
+            writer = SummaryWriter(log_dir=f"runs/{experiment_name}")
+        else:
+            writer = None
+
         self.model.train()
         adaptive_loss_weights = None
         loss_coefficients_history = []
@@ -84,7 +136,7 @@ class Trainer:
             train_loss_components_sums = torch.zeros(3, device=self.device)  
             total_batches = 0
 
-            for batch in self.train_data_loader:
+            for batch_idx, batch in enumerate(self.train_data_loader):
                 batch = send_batch_to_device(batch, self.device)
                 tv_estimates_batch, _, _ = self.model(batch)
                 train_loss_components, _ = SurfaceArbitrageFreeLoss()(tv_estimates_batch, batch)
@@ -115,6 +167,20 @@ class Trainer:
                 self.optimizer.step()
                 total_batches += 1
 
+                if writer:
+                    # Log the train loss and loss components to TensorBoard
+                    writer.add_scalars('Train Loss', {
+                        'MSE Loss': train_loss_components[0].item(),
+                        'Calendar Arbitrage Loss': train_loss_components[1].item(),
+                        'Butterfly Arbitrage Loss': train_loss_components[2].item(),
+                    }, epoch * len(self.train_data_loader) + batch_idx)
+
+                    writer.add_scalars('Loss Coeffficients', {
+                        'MSE Loss': loss_coefficients[0].item(),
+                        'Calendar Arbitrage Loss': loss_coefficients[1].item(),
+                        'Butterfly Arbitrage Loss': loss_coefficients[2].item(),
+                    }, epoch * len(self.train_data_loader) + batch_idx)
+
                 # Free up memory
                 del batch, tv_estimates_batch, train_loss_components, loss_coefficients, train_loss
                 torch.cuda.empty_cache()
@@ -128,10 +194,20 @@ class Trainer:
             avg_validate_loss_components = self.validate()
             validate_loss_components_history.append(avg_validate_loss_components.cpu().numpy())
 
-            print(f"Epoch {epoch + 1}/{self.n_epochs} - Training Loss: {avg_train_loss_components.cpu().numpy()}, Validation Loss: {avg_validate_loss_components.cpu().numpy()}")
-
+            if writer:
+                print(f"Epoch {epoch + 1}/{self.n_epochs} - Training Loss: {avg_train_loss_components.cpu().numpy()}, Validation Loss: {avg_validate_loss_components.cpu().numpy()}")
+                 # Log the train loss and loss components to TensorBoard
+                writer.add_scalars('Validation Loss', {
+                    'MSE Loss': avg_validate_loss_components[0].item(),
+                    'Calendar Arbitrage Loss': avg_validate_loss_components[1].item(),
+                    'Butterfly Arbitrage Loss': avg_validate_loss_components[2].item(),
+                }, epoch)
+                
             # Adjust learning rate
             self.scheduler.step()
+
+        if writer:
+            writer.close()    
 
         return loss_coefficients_history, train_loss_components_history, validate_loss_components_history
 
@@ -171,7 +247,7 @@ class Trainer:
             with torch.no_grad():
                 batch = next(iter(self.test_data_loader))
                 batch = send_batch_to_device(batch, self.device)
-                tv_estimates_batch, self_attention_maps, external_attention_maps = ivy_spt(batch, output_attention_map=output_attention_map)
+                tv_estimates_batch, self_attention_maps, external_attention_maps = self.model(batch, output_attention_map=output_attention_map)
 
                 # Free up memory
                 del batch, tv_estimates_batch
@@ -204,38 +280,3 @@ class Trainer:
 
         return avg_test_loss_components, test_loss_records   
     
-    def _layer_wise_learning_rate_decay(
-        self, 
-        layer_wise_decay, 
-        base_lr
-    ):
-        params = []
-
-        # Final layer (depth 0)
-        params.append({
-            'params': self.model.final_layer.parameters(),
-            'lr': base_lr
-        })
-
-        # Surface Encoder layers (depth from 1 to num_encoder_blocks)
-        if layer_wise_decay is not None:
-            for i, encoder in enumerate(self.model.surface_encoder.encoders):
-                lr = base_lr * (layer_wise_decay ** (i + 1))
-                params.append({
-                    'params': encoder.parameters(),
-                    'lr': lr
-                })
-
-            # Surface Embedding layers (highest depth)
-            params.append({
-                'params': self.model.surface_embedding.parameters(),
-                'lr': base_lr * (layer_wise_decay ** (len(self.model.surface_encoder.encoders) + 1))
-            })
-        else:
-            # No decay: All layers use the base learning rate
-            params.extend([
-                {'params': self.model.surface_encoder.parameters(), 'lr': base_lr},
-                {'params': self.model.surface_embedding.parameters(), 'lr': base_lr},
-            ])
-
-        return params
