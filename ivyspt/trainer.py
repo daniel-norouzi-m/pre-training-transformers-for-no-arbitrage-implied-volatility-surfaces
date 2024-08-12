@@ -6,7 +6,6 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR, SequentialLR
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
-
 from ivyspt.adaptive_loss_coefficients import AdaptiveLossCoefficients
 from ivyspt.surface_arbitrage_free_loss import SurfaceArbitrageFreeLoss
 
