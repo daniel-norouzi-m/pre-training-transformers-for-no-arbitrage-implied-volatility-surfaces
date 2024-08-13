@@ -3,8 +3,12 @@ import torch
 import torch.nn as nn
 
 class SurfaceArbitrageFreeLoss(nn.Module):
-    def __init__(self):
+    def __init__(
+        self,
+        remove_multi_loss=False
+    ):
         super(SurfaceArbitrageFreeLoss, self).__init__()
+        self.remove_multi_loss = remove_multi_loss
 
     def forward(
         self, 
@@ -30,6 +34,10 @@ class SurfaceArbitrageFreeLoss(nn.Module):
             # Calculate mean squared error between model estimates and target variances
             mse_loss = torch.sum((total_implied_variance - target_variance) ** 2)
             mse_loss_sum += mse_loss
+
+            # If remove_multi_loss is True, skip additional loss calculations
+            if self.remove_multi_loss:
+                continue
 
             unit_vectors = torch.eye(sequence_length, device=total_implied_variance.device)
 
@@ -83,6 +91,10 @@ class SurfaceArbitrageFreeLoss(nn.Module):
 
         # Calculate mean losses
         mse_loss = mse_loss_sum / total_elements
+        # If remove_multi_loss is True, return the MSE loss
+        if self.remove_multi_loss:
+            return torch.stack([mse_loss, torch.tensor(0.0), torch.tensor(0.0)]), None
+
         calendar_arbitrage_loss = calendar_arbitrage_loss_sum / total_elements
         butterfly_arbitrage_loss = butterfly_arbitrage_loss_sum / total_elements
 
@@ -93,7 +105,6 @@ class SurfaceArbitrageFreeLoss(nn.Module):
             loss_records = pd.DataFrame(loss_records)
             loss_records['Datetime'] = batch['Datetime']
             loss_records['Mask Proportion'] = batch['Mask Proportion']
-            loss_records.set_index(['Datetime', 'Mask Proportion'], inplace=True)
 
             return total_losses, loss_records
 

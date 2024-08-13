@@ -39,7 +39,8 @@ class Trainer:
         adamw_weight_decay, 
         layer_wise_decay,
         loss_asymmetry_alpha, 
-        device
+        device,
+        remove_multi_loss=False
     ):
         self.model = model.to(device)
         self.train_data_loader = train_data_loader
@@ -52,6 +53,7 @@ class Trainer:
         self.peak_learning_rate = peak_learning_rate
         self.min_learning_rate = min_learning_rate
         self.device = device
+        self.remove_multi_loss = remove_multi_loss
 
         # AdamW Optimizer with Layer-wise decay
         self.optimizer = AdamW(
@@ -135,16 +137,23 @@ class Trainer:
             train_loss_components_sums = torch.zeros(3, device=self.device)  
             total_batches = 0
 
+            # Reset gradients before starting the epoch
+            self.optimizer.zero_grad()
+
             for batch_idx, batch in enumerate(self.train_data_loader):
                 batch = send_batch_to_device(batch, self.device)
                 tv_estimates_batch, _, _ = self.model(batch)
-                train_loss_components, _ = SurfaceArbitrageFreeLoss()(tv_estimates_batch, batch)
+                train_loss_components, _ = SurfaceArbitrageFreeLoss(
+                    remove_multi_loss=self.remove_multi_loss
+                )(tv_estimates_batch, batch)
                 
                 if adaptive_loss_weights is None: 
                     adaptive_loss_weights = AdaptiveLossCoefficients(
                         initial_losses=train_loss_components.detach().clone(),
                         alpha=self.loss_asymmetry_alpha,
-                        learning_rate=np.sqrt(self.peak_learning_rate * self.min_learning_rate)
+                        learning_rate=np.sqrt(self.peak_learning_rate * self.min_learning_rate),
+                        remove_multi_loss=self.remove_multi_loss,
+                        device=self.device
                     )
 
                 # Obtain the current loss coefficients
@@ -157,13 +166,9 @@ class Trainer:
                 # Accumulate the loss components
                 train_loss_components_sums += train_loss_components.detach().clone()
 
-                self.optimizer.zero_grad()
                 train_loss.backward(retain_graph=True)
 
                 adaptive_loss_weights(train_loss_components, self.model.final_layer)
-
-                clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-                self.optimizer.step()
                 total_batches += 1
 
                 if writer:
@@ -185,6 +190,10 @@ class Trainer:
                 torch.cuda.empty_cache()
                 gc.collect()
 
+            # Perform optimizer step after accumulating gradients across all batches
+            clip_grad_norm_(self.model.parameters(), self.gradient_clip)
+            self.optimizer.step()
+            
             # Calculate the average loss components for this epoch
             avg_train_loss_components = train_loss_components_sums / total_batches
             train_loss_components_history.append(avg_train_loss_components.cpu().numpy())    
@@ -204,6 +213,9 @@ class Trainer:
                 
             # Adjust learning rate
             self.scheduler.step()
+            # Reset gradients after optimizer step
+            self.optimizer.zero_grad()
+
 
         if writer:
             writer.close()    
@@ -274,8 +286,8 @@ class Trainer:
             gc.collect()
 
         # Calculate the average loss components for this epoch
-        avg_test_loss_components = test_loss_components_sums / total_batches  
+        test_loss_components = test_loss_components_sums / total_batches  
         test_loss_records = pd.concat(test_loss_records) 
 
-        return avg_test_loss_components, test_loss_records   
+        return test_loss_components, test_loss_records   
     
