@@ -25,8 +25,8 @@ class IvySPT(nn.Module):
         super(IvySPT, self).__init__()
         self.surface_embedding = SurfaceEmbedding(
             d_embedding, 
-            remove_kernel, 
-            remove_positional_embedding
+            remove_kernel=remove_kernel, 
+            remove_positional_embedding=remove_positional_embedding
         )
         self.surface_encoder = SurfaceEncoder(
             d_embedding, 

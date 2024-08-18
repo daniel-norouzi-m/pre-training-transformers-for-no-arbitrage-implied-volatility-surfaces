@@ -137,9 +137,6 @@ class Trainer:
             train_loss_components_sums = torch.zeros(3, device=self.device)  
             total_batches = 0
 
-            # Reset gradients before starting the epoch
-            self.optimizer.zero_grad()
-
             for batch_idx, batch in enumerate(self.train_data_loader):
                 batch = send_batch_to_device(batch, self.device)
                 tv_estimates_batch, _, _ = self.model(batch)
@@ -151,7 +148,7 @@ class Trainer:
                     adaptive_loss_weights = AdaptiveLossCoefficients(
                         initial_losses=train_loss_components.detach().clone(),
                         alpha=self.loss_asymmetry_alpha,
-                        learning_rate=np.sqrt(self.peak_learning_rate * self.min_learning_rate),
+                        learning_rate=self.peak_learning_rate,
                         remove_multi_loss=self.remove_multi_loss,
                         device=self.device
                     )
@@ -166,11 +163,61 @@ class Trainer:
                 # Accumulate the loss components
                 train_loss_components_sums += train_loss_components.detach().clone()
 
+                # Reset gradients 
+                self.optimizer.zero_grad()
                 train_loss.backward(retain_graph=True)
 
                 adaptive_loss_weights(train_loss_components, self.model.final_layer)
                 total_batches += 1
 
+                # Calculate and print the gradient norm before clipping
+                # total_norm = 0
+                # for p in self.model.parameters():
+                #     if p.grad is not None:
+                #         param_norm = p.grad.data.norm(2)
+                #         total_norm += param_norm.item() ** 2
+                # total_norm = total_norm ** 0.5
+                # print(f"Gradient Norm before clipping: {total_norm:.4f}")  
+
+                # for name, param in self.model.named_parameters():
+                #     if param.grad is not None:  # Ensure the parameter has a gradient
+                #         grad_min = param.grad.min().item()  # Minimum gradient value
+                #         grad_max = param.grad.max().item()  # Maximum gradient value
+                #         print(f"Layer: {name} | Gradient Interval: [{grad_min}, {grad_max}]")      
+
+                # Apply gradient clipping if gradient_clip is set, otherwise do nothing
+                if self.gradient_clip is not None:
+                    torch.nn.utils.clip_grad_value_(self.model.parameters(), self.gradient_clip)
+
+                # clipped_norm = 0
+                # for p in self.model.parameters():
+                #     if p.grad is not None:
+                #         param_norm = p.grad.data.norm(2)
+                #         clipped_norm += param_norm.item() ** 2
+                # clipped_norm = clipped_norm ** 0.5
+                # print(f"Gradient Norm after clipping: {clipped_norm:.4f}")    
+
+                # initial_params = {}
+                # for name, param in self.model.named_parameters():
+                #     if param.requires_grad:  # Only consider parameters that require gradients
+                #         initial_params[name] = param.clone().detach()  # Clone the parameter to avoid any references
+
+
+                # Perform optimizer step
+                self.optimizer.step()    
+
+                # for name, param in self.model.named_parameters():
+                #     if param.requires_grad:  # Only consider parameters that require gradients
+                #         # Calculate the absolute change
+                #         absolute_change = torch.abs(param - initial_params[name])
+                        
+                #         # Calculate the mean of the absolute changes
+                #         avg_absolute_change = absolute_change.mean().item()
+                        
+                #         # Print the average absolute change for this parameter
+                #         print(f"Parameter {name} average absolute change: {avg_absolute_change:.6f}")
+
+                    
                 if writer:
                     # Log the train loss and loss components to TensorBoard
                     writer.add_scalars('Train Loss', {
@@ -189,10 +236,6 @@ class Trainer:
                 del batch, tv_estimates_batch, train_loss_components, loss_coefficients, train_loss
                 torch.cuda.empty_cache()
                 gc.collect()
-
-            # Perform optimizer step after accumulating gradients across all batches
-            clip_grad_norm_(self.model.parameters(), self.gradient_clip)
-            self.optimizer.step()
             
             # Calculate the average loss components for this epoch
             avg_train_loss_components = train_loss_components_sums / total_batches
@@ -213,8 +256,6 @@ class Trainer:
                 
             # Adjust learning rate
             self.scheduler.step()
-            # Reset gradients after optimizer step
-            self.optimizer.zero_grad()
 
 
         if writer:
@@ -259,11 +300,6 @@ class Trainer:
                 batch = next(iter(self.test_data_loader))
                 batch = send_batch_to_device(batch, self.device)
                 tv_estimates_batch, self_attention_maps, external_attention_maps = self.model(batch, output_attention_map=output_attention_map)
-
-                # Free up memory
-                del batch, tv_estimates_batch
-                torch.cuda.empty_cache()
-                gc.collect()
 
                 return self_attention_maps, external_attention_maps
 

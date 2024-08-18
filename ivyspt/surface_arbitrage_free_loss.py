@@ -39,38 +39,62 @@ class SurfaceArbitrageFreeLoss(nn.Module):
             if self.remove_multi_loss:
                 continue
 
-            unit_vectors = torch.eye(sequence_length, device=total_implied_variance.device)
+            # unit_vectors = torch.eye(sequence_length, device=total_implied_variance.device)
 
-            # Compute gradients needed for arbitrage conditions
-            w_t = torch.stack([
-                torch.autograd.grad(
-                    outputs=total_implied_variance, 
-                    inputs=time_to_maturity,
-                    grad_outputs=vec, 
-                    create_graph=True   
-                )[0]
-                for vec in unit_vectors
-            ]).diag()
+            # # Compute gradients needed for arbitrage conditions
+            # w_t = torch.stack([
+            #     torch.autograd.grad(
+            #         outputs=total_implied_variance, 
+            #         inputs=time_to_maturity,
+            #         grad_outputs=vec, 
+            #         create_graph=True   
+            #     )[0]
+            #     for vec in unit_vectors
+            # ]).diag()
 
-            w_x = torch.stack([
-                torch.autograd.grad(
-                    outputs=total_implied_variance, 
-                    inputs=log_moneyness,
-                    grad_outputs=vec, 
-                    create_graph=True   
-                )[0]
-                for vec in unit_vectors
-            ]).diag()
+            # w_x = torch.stack([
+            #     torch.autograd.grad(
+            #         outputs=total_implied_variance, 
+            #         inputs=log_moneyness,
+            #         grad_outputs=vec, 
+            #         create_graph=True   
+            #     )[0]
+            #     for vec in unit_vectors
+            # ]).diag()
 
-            w_xx = torch.stack([
-                torch.autograd.grad(
-                    outputs=w_x, 
-                    inputs=log_moneyness, 
-                    grad_outputs=vec,
-                    create_graph=True   
-                )[0]
-                for vec in unit_vectors
-            ]).diag()
+            # w_xx = torch.stack([
+            #     torch.autograd.grad(
+            #         outputs=w_x, 
+            #         inputs=log_moneyness, 
+            #         grad_outputs=vec,
+            #         create_graph=True   
+            #     )[0]
+            #     for vec in unit_vectors
+            # ]).diag()
+
+            # Sum the outputs
+            sum_total_implied_variance = total_implied_variance.sum()
+
+            # Calculate the gradient of the sum of outputs with respect to time_to_maturity
+            w_t = torch.autograd.grad(
+                outputs=sum_total_implied_variance, 
+                inputs=time_to_maturity,
+                create_graph=True   
+            )[0]
+
+            # Calculate the gradient of the sum of outputs with respect to log_moneyness
+            w_x = torch.autograd.grad(
+                outputs=sum_total_implied_variance, 
+                inputs=log_moneyness,
+                create_graph=True   
+            )[0]
+
+            # Calculate the second-order gradient of the sum of outputs with respect to log_moneyness
+            w_xx = torch.autograd.grad(
+                outputs=w_x.sum(), 
+                inputs=log_moneyness, 
+                create_graph=True   
+            )[0]
 
             # Calculate Calendar Arbitrage Loss
             calendar_arbitrage_loss = torch.clamp(-w_t, min=0) ** 2

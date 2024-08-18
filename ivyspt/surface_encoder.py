@@ -4,7 +4,7 @@ import torch.nn as nn
 class ResidualNorm(nn.Module):
     def __init__(self, d_embedding):
         super(ResidualNorm, self).__init__()
-        self.norm = nn.LayerNorm(d_embedding)
+        self.norm = nn.LayerNorm(d_embedding, elementwise_affine=False)
 
     def forward(
         self, 
