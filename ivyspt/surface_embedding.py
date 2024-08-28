@@ -9,13 +9,13 @@ class SurfaceBatchNorm(nn.Module):
         momentum=0.1
     ):
         super(SurfaceBatchNorm, self).__init__()
-        self.log_moneyness_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
-        self.time_to_maturity_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
-        self.market_return_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
-        self.market_volatility_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
-        self.treasury_rate_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
-        self.tv_mean_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
-        self.tv_std_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=False)
+        self.log_moneyness_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
+        self.time_to_maturity_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
+        self.market_return_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
+        self.market_volatility_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
+        self.treasury_rate_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
+        self.tv_mean_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
+        self.tv_std_bn = nn.BatchNorm1d(num_features, momentum=momentum, affine=True)
 
     def forward(self, batch):
         # Concatenate all tensors from the Input Surface into one tensor for each feature
@@ -126,8 +126,8 @@ class SurfaceContinuousKernelPositionalEmbedding(nn.Module):
                 )
             )
 
-        self.input_surface_layer_norm = nn.LayerNorm(d_embedding, elementwise_affine=False)
-        self.query_points_layer_norm = nn.LayerNorm(d_embedding, elementwise_affine=False)
+        self.input_surface_layer_norm = nn.LayerNorm(d_embedding, elementwise_affine=True)
+        self.query_points_layer_norm = nn.LayerNorm(d_embedding, elementwise_affine=True)
 
         # Initialize learnable scaling parameter (the base for positional embedding)
         self.log_scale = nn.Parameter(torch.log(torch.tensor(10000.0)))
@@ -227,7 +227,7 @@ class SurfaceEmbedding(nn.Module):
         super(SurfaceEmbedding, self).__init__()
         self.batch_norm = SurfaceBatchNorm(num_features=1, momentum=momentum)
         self.kernel_positional_embedding = SurfaceContinuousKernelPositionalEmbedding(d_embedding, remove_kernel, remove_positional_embedding)
-        self.layer_norm = nn.LayerNorm(d_embedding, elementwise_affine=False)
+        self.layer_norm = nn.LayerNorm(d_embedding, elementwise_affine=True)
         self.mask_token = nn.Parameter(torch.randn(d_embedding))
 
     def forward(self, batch):
