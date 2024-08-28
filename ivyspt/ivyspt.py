@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 from ivyspt.surface_embedding import SurfaceEmbedding
 from ivyspt.surface_encoder import SurfaceEncoder
@@ -44,7 +45,8 @@ class IvySPT(nn.Module):
             remove_gate
         )
         self.final_layer = nn.Linear(d_embedding, 1)
-        nn.init.normal_(self.final_layer.weight, mean=0.0, std=weight_initializer_std * (1 / (2 * (num_encoder_blocks + 1)) ** 0.5))
+        # nn.init.normal_(self.final_layer.weight, mean=0.0, std=weight_initializer_std * (1 / (2 * (num_encoder_blocks + 1)) ** 0.5))
+        nn.init.constant_(self.final_layer.weight, linear_bias_initializer_value)
         nn.init.constant_(self.final_layer.bias, linear_bias_initializer_value)
 
     def forward(
@@ -80,6 +82,9 @@ class IvySPT(nn.Module):
 
             # Estimate the implied volatility for each query point using the fully connected layer
             tv_estimates = self.final_layer(encoded_query_points).squeeze(-1)
+
+            tv_estimates = batch['Market Features']['TV Mean'][i].item() + \
+                batch['Market Features']['TV Std.'][i].item() * tv_estimates
 
             # Append the estimates to the batch list
             tv_estimates_batch.append(tv_estimates)

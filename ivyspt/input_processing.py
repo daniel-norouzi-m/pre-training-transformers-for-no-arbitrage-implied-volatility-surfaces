@@ -168,6 +168,8 @@ class IVSurfaceDataset(Dataset):
         tv_mean = np.mean(total_variance_unmasked)
         tv_std = np.std(total_variance_unmasked)
 
+        total_variance_unmasked = (total_variance_unmasked - tv_mean) / tv_std
+
         # Define query indices based on n_query_points
         if self.n_query_points is None:
             query_indices = masked_indices

@@ -187,9 +187,9 @@ class SurfaceContinuousKernelPositionalEmbedding(nn.Module):
             # Positional embedding for query points
             query_points_pe = self._compute_positional_embedding(query_coords)
 
-            # Add positional embeddings with a factor of sqrt(2)
-            input_surface_final = input_surface_embedded + input_surface_pe * np.sqrt(2)
-            query_points_final = query_points_embedded + query_points_pe * np.sqrt(2)
+            # Add positional embeddings
+            input_surface_final = input_surface_embedded + input_surface_pe
+            query_points_final = query_points_embedded + query_points_pe 
 
             # Append the encoded surface for this input surface to the batch list
             input_surface_embeddings.append(input_surface_final)
