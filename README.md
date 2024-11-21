@@ -145,53 +145,47 @@ Each encoder block within the Surface Encoding module performs the following ope
 1. **Self-Attention**:
    - Captures dependencies between different positions in the surface embedding.
    - Mathematically represented as:
-   ```math
-   \text{SA}(X) = \text{softmax}\left(\frac{XQ (XK)^T}{\sqrt{d_k}}\right) XV
-   ```
+     
+$$\text{SA}(X) = \text{softmax}\left(\frac{XQ (XK)^T}{\sqrt{d_k}}\right) XV$$
+   
    - Where $X$ is the input sequence, $Q$, $K$, and $V$ are the query, key, and value projections of $X$, respectively.
      
    - Applies a residual connection followed by layer normalization to the gated embedding:
-   ```math
-   \text{SA}(X) = \text{LayerNorm}(X + \text{SA}(X))
-   ```
 
-2. **Cross-Attention**:
+$$\text{SA}(X) = \text{LayerNorm}(X + \text{SA}(X))$$
+
+3. **Cross-Attention**:
    - Incorporates external market features (S&P returns, VIX, treasury rates, mean of surface IVs, std. of surface IVs) into the encoding process:
-   ```math
-   \text{EA}(X, M) = \text{softmax}\left(\frac{XQ (MK)^T}{\sqrt{d_k}}\right) MV
-   ```
+
+$$\text{EA}(X, M) = \text{softmax}\left(\frac{XQ (MK)^T}{\sqrt{d_k}}\right) MV$$
+
    - $M$ denotes the external market features, treated as additional key and value inputs to the attention mechanism.
    - Applies a residual connection followed by layer normalization to the gated embedding:
-   ```math
-   \text{EA}(X, M) = \text{LayerNorm}(X + \text{EA}(X, M))
-   ```
 
-3. **Gated Attention Fusion**:
+$$\text{EA}(X, M) = \text{LayerNorm}(X + \text{EA}(X, M))$$
+
+4. **Gated Attention Fusion**:
    - Combines the outputs of self-attention and cross-attention using a gating mechanism.
    - The attention outputs are concatenated and passed through a linear layer followed by a sigmoid activation to compute the gating values:
-   ```math
-   \text{Gate}(X) = \sigma\left(W_g \cdot \left[\text{SA}(X); \text{EA}(X, M)\right] + b_g\right)
-   ```
+
+$$\text{Gate}(X) = \sigma\left(W_g \cdot \left[\text{SA}(X); \text{EA}(X, M)\right] + b_g\right)$$
 
    - The final gated embedding is calculated as a weighted average of the self-attention and cross-attention outputs:
-   ```math
-   \text{Gated Embedding}(X) = \text{Gate}(X) \cdot \text{SA}(X) + (1 - \text{Gate}(X)) \cdot \text{EA}(X, M)
-   ```
+
+$$\text{Gated Embedding}(X) = \text{Gate}(X) \cdot \text{SA}(X) + (1 - \text{Gate}(X)) \cdot \text{EA}(X, M)$$
 
    - Applies a residual connection followed by layer normalization to the gated embedding:
-   ```math
-   X = \text{LayerNorm}(X + \text{Gated Embedding}(X))
-   ```
 
-4. **Feed-Forward Network**:
+$$X = \text{LayerNorm}(X + \text{Gated Embedding}(X))$$
+
+5. **Feed-Forward Network**:
    - A two-layer network with GELU activation and dropout applied between layers:
-   ```math
-   \text{FFN}(X) = W_2 \cdot \text{GELU}(W_1X + b_1) + b_2
-   ```
-   - Integrates the feed-forward network output:
-   ```math
-   X = \text{LayerNorm}(X + \text{FFN}(X))
-   ```
+
+$$\text{FFN}(X) = W_2 \cdot \text{GELU}(W_1X + b_1) + b_2$$
+
+   - Integrates the feed-forward network output:\
+     
+$$X = \text{LayerNorm}(X + \text{FFN}(X))$$
 
 #### Sequential Processing
 
@@ -492,27 +486,27 @@ GradNorm works by normalizing the gradient magnitudes across tasks and adjusting
 The GradNorm algorithm can be summarized by the following key steps:
 
 1. **Define Gradient Norms and Training Rates**:
-   - $ G_W^{(i)}(t) = \| \nabla_W [w_i(t) L_i(t)] \|_2 $: L2 norm of the gradient of the weighted single-task loss.
-   - $ G_W(t) = \mathbb{E}_{\text{task}} [G_W^{(i)}(t)] $: Average gradient norm across all tasks.
-   - $ \tilde{L}_i(t) = \frac{L_i(t)}{L_i(0)} $: Loss ratio for task $i$, representing the inverse training rate.
-   - $ r_i(t) = \frac{\tilde{L}_i(t)}{\mathbb{E}_{\text{task}} [\tilde{L}_i(t)]} $: Relative inverse training rate.
+   - $G_W^{(i)}(t) = \| \nabla_W [w_i(t) L_i(t)] \|_2$: L2 norm of the gradient of the weighted single-task loss.
+   - $G_W(t) = \mathbb{E}_{\text{task}} [G_W^{(i)}(t)]$: Average gradient norm across all tasks.
+   - $\tilde{L}_i(t) = \frac{L_i(t)}{L_i(0)}$: Loss ratio for task $i$, representing the inverse training rate.
+   - $`r_i(t) = \frac{\tilde{L}_i(t)}{\mathbb{E}_{\text{task}} [\tilde{L}_i(t)]}`$: Relative inverse training rate.
 
 2. **Adjust Gradient Norms**:
    - Target gradient norm for each task $i$ is adjusted as:
-   $$
-   G_W^{(i)}(t) \rightarrow G_W(t) \times [r_i(t)]^\alpha
-   $$
+     
+$$G_W^{(i)}(t) \rightarrow G_W(t) \times [r_i(t)]^\alpha$$
+
    where $\alpha$ is a hyperparameter that sets the strength of the balancing force.
 
 3. **Compute Gradient Loss**:
    - The gradient loss $ L_{\text{grad}} $ is defined as:
-   $$
-   L_{\text{grad}}(t; w_i(t)) = \sum_i \left| G_W^{(i)}(t) - G_W(t) \times [r_i(t)]^\alpha \right|_1
-   $$
+     
+$$L_{\text{grad}}(t; w_i(t)) = \sum_i \left| G_W^{(i)}(t) - G_W(t) \times [r_i(t)]^\alpha \right|_1$$
+
    This loss penalizes the network when gradient magnitudes are too large or too small compared to the desired target.
 
 4. **Update Loss Weights**:
-   - The loss weights $ w_i(t) $ are updated using the gradient of $ L_{\text{grad}} $ to balance the training rates.
+   - The loss weights $w_i(t)$ are updated using the gradient of $L_{\text{grad}}$ to balance the training rates.
 
 By applying GradNorm, we ensure that the training process is balanced and that each task contributes effectively to the overall learning.
 
